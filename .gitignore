@@ -1,8 +1,30 @@
-# NPM Packages
-node_modules
+# Dependencies
+node_modules/
+dist/
 
-# Environmental Variables
+# Environment
 .env
-.env.development
-.env.staging
 .env.production
+.env.staging
+
+# Logs
+logs/
+*.log
+
+# Database
+*.sqlite
+*.db
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Coverage
+coverage/
+.nyc_output/

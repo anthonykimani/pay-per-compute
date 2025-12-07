@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+// @ts-expect-error
 import { paymentMiddleware, Resource } from 'x402-express';
 import { AppDataSource } from '../config/database';
 import { Asset } from '../models/asset.entity';
