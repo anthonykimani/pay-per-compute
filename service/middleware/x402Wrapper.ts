@@ -3,10 +3,11 @@ import { paymentMiddleware, Resource } from 'x402-express';
 import { AppDataSource } from '../config/database';
 import { Asset } from '../models/asset.entity';
 import { PaymentLog } from '../models/paymentlog.entity';
-import { SessionService } from '../services/session.service';
-import { AssetService } from '../services/asset.service';
-import { logger } from '../utils/logger';
+
 import { ENV } from '../config/env';
+import { SessionService } from '../services/session-service';
+import { AssetService } from '../services/asset-service';
+import logger from '../utils/logger';
 
 const paymentLogRepository = AppDataSource.getRepository(PaymentLog);
 
