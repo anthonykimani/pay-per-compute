@@ -4,6 +4,7 @@ import { AppDataSource } from '../config/database';
 import { Asset } from '../models/asset.entity';
 import { AssetService } from '../services/asset-service';
 import logger from '../utils/logger';
+import { Merchant } from '../models/merchant.entity';
 
 const assetRepository = AppDataSource.getRepository(Asset);
 
@@ -71,8 +72,13 @@ export class AssetController {
 
     static async create(req: Request, res: Response) {
         try {
-            const asset = assetRepository.create(req.body);
-            await assetRepository.save(asset);
+            const merchant = (req as any).merchant as Merchant;
+            const { name, pricePerUnit, unit, type, metadata } = req.body;
+            const asset = await AssetService.create({
+                name, pricePerUnit, unit, type, metadata, merchantWallet: merchant.walletAddress,
+                merchantId: merchant.id
+            });
+
             res.status(201).json({ status: 'success', data: asset });
         } catch (error) {
             logger.error('❌ Failed to create asset', { error });

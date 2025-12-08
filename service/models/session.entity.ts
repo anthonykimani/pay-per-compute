@@ -1,20 +1,17 @@
-import { Entity, PrimaryColumn, Column, ManyToOne, JoinColumn, Index, CreateDateColumn } from 'typeorm';
+import { Entity, Column, ManyToOne, JoinColumn, Index, CreateDateColumn, PrimaryGeneratedColumn } from 'typeorm';
 import { Asset } from './asset.entity';
 
 
 @Entity('sessions')
-@Index(['assetId'])
+@Index(['asset'])
 @Index(['payerWallet'])
 export class Session {
-  @PrimaryColumn('uuid')
+  @PrimaryGeneratedColumn('uuid')
   token: string;
 
   @ManyToOne(() => Asset, { eager: true })
   @JoinColumn({ name: 'asset_id' })
   asset: Asset;
-
-  @Column({ name: 'asset_id' })
-  assetId: string;
 
   @Column({ name: 'payer_wallet', length: 44 })
   payerWallet: string;
@@ -26,6 +23,7 @@ export class Session {
   startedAt: Date;
 
   @Column({ name: 'expires_at', type: 'timestamp' })
+  @Index()
   expiresAt: Date;
 
   @Column({ name: 'is_extended', type: 'boolean', default: false })

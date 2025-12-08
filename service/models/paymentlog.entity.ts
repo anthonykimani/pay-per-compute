@@ -1,9 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, Index, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, Index, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Asset } from './asset.entity';
 
 @Entity('payment_logs')
 @Index(['signature'])
 @Index(['payerWallet'])
 @Index(['assetId'])
+@Index(['timestamp'])
 export class PaymentLog {
   @PrimaryGeneratedColumn('increment')
   id: number;
@@ -16,6 +18,10 @@ export class PaymentLog {
 
   @Column({ name: 'payer_wallet', length: 44 })
   payerWallet: string;
+
+  @ManyToOne(() => Asset, { onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'asset_id' })
+  asset!: Asset;
 
   @Column({ name: 'asset_id', type: 'uuid' })
   assetId: string;

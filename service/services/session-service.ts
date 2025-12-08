@@ -1,11 +1,11 @@
 import { AppDataSource } from '../config/database';
-import { Asset } from '../models/asset.entity';
 import { Session } from '../models/session.entity';
+import { Asset } from '../models/asset.entity';
 
 import { AssetStatus } from '../enums/asset-status.enum';
-import { ENV } from '../config/env';
 import { UnitType } from '../enums/unit-type.enum';
-import { MoreThan } from 'typeorm'; // ✅ For date comparisons
+import { MoreThan } from 'typeorm';
+import { ENV } from '../config/env';
 import logger from '../utils/logger';
 
 const sessionRepository = AppDataSource.getRepository(Session);
@@ -14,45 +14,9 @@ const assetRepository = AppDataSource.getRepository(Asset);
 export class SessionService {
   private static expiryTimers = new Map<string, NodeJS.Timeout>();
 
-  // ✅ NEW: Fetch asset by ID (needed for dynamic payment middleware)
+  // ✅ NEW: Get asset for payment middleware
   static async getAsset(assetId: string): Promise<Asset | null> {
-    return assetRepository.findOne({
-      where: { id: assetId }
-    });
-  }
-
-  // ✅ FIXED: Use MoreThan for date comparison
-  static async getActiveSession(assetId: string): Promise<Session | null> {
-    return sessionRepository.findOne({
-      where: {
-        assetId,
-        expiresAt: MoreThan(new Date()) // ✅ Correct: expiresAt > now
-      },
-      relations: ['asset'],
-      order: { createdAt: 'DESC' }
-    });
-  }
-
-  // ✅ FIXED: Use MoreThan for date comparison
-  static async isSessionActive(assetId: string): Promise<boolean> {
-    const session = await sessionRepository.findOne({
-      where: {
-        assetId,
-        expiresAt: MoreThan(new Date())
-      }
-    });
-    return !!session;
-  }
-
-  // ✅ BETTER: Query builder approach (more flexible)
-  static async hasActiveSession(assetId: string): Promise<boolean> {
-    const count = await sessionRepository
-      .createQueryBuilder('session')
-      .where('session.assetId = :assetId', { assetId })
-      .andWhere('session.expiresAt > :now', { now: new Date() })
-      .getCount();
-    
-    return count > 0;
+    return assetRepository.findOne({ where: { id: assetId } });
   }
 
   static async createSession(assetId: string, amount: string, payer: string) {
@@ -70,12 +34,12 @@ export class SessionService {
     const baseMinutes = amountPaid / pricePerUnit;
     const durationMs = this.calculateDurationMs(baseMinutes, asset.unit);
 
-    const token = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const token = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
     const expiresAt = new Date(Date.now() + durationMs);
 
     const session = sessionRepository.create({
       token,
-      assetId,
+      asset,
       payerWallet: payer,
       amountPaid: amount,
       expiresAt,
@@ -98,7 +62,18 @@ export class SessionService {
   static async getSession(token: string) {
     return sessionRepository.findOne({
       where: { token },
-      relations: ['asset']
+      relations: ['asset', 'asset.merchant']
+    });
+  }
+
+  static async getActiveSession(assetId: string): Promise<Session | null> {
+    return sessionRepository.findOne({
+      where: {
+        asset: { id: assetId },
+        expiresAt: MoreThan(new Date())
+      },
+      relations: ['asset'],
+      order: { createdAt: 'DESC' }
     });
   }
 
@@ -112,13 +87,8 @@ export class SessionService {
       throw new Error('Session already expired');
     }
 
-    const asset = await assetRepository.findOneBy({ id: session.assetId });
-    if (!asset) {
-      throw new Error('Associated asset not found');
-    }
-
-    const additionalMinutes = parseFloat(additionalAmount) / parseFloat(asset.pricePerUnit);
-    const additionalMs = this.calculateDurationMs(additionalMinutes, asset.unit);
+    const additionalMinutes = parseFloat(additionalAmount) / parseFloat(session.asset.pricePerUnit);
+    const additionalMs = this.calculateDurationMs(additionalMinutes, session.asset.unit);
     const newExpiry = new Date(session.expiresAt.getTime() + additionalMs);
 
     const existingTimer = this.expiryTimers.get(token);
@@ -141,7 +111,7 @@ export class SessionService {
     return session;
   }
 
-  private static calculateDurationMs(minutes: number, unit: UnitType): number {
+  static calculateDurationMs(minutes: number, unit: UnitType): number {
     switch (unit) {
       case 'hour':
         return minutes * 60 * 60 * 1000;
@@ -155,6 +125,28 @@ export class SessionService {
     }
   }
 
+  static calculateMinutes(amountPaid: string, pricePerUnit: string, unit: UnitType): number {
+    const amount = parseFloat(amountPaid);
+    const price = parseFloat(pricePerUnit);
+    const baseMinutes = amount / price;
+
+    switch (unit) {
+      case 'hour':
+        return baseMinutes * 60;
+      case 'day':
+        return baseMinutes * 60 * 24;
+      case 'session':
+        return baseMinutes;
+      case 'minute':
+      default:
+        return baseMinutes;
+    }
+  }
+
+  static calculateMinutesLeft(expiresAt: Date): number {
+    return Math.ceil((expiresAt.getTime() - Date.now()) / 60000);
+  }
+
   static async expireSession(token: string) {
     const timer = this.expiryTimers.get(token);
     if (timer) {
@@ -165,13 +157,12 @@ export class SessionService {
     const session = await this.getSession(token);
     if (!session) return;
 
-    await assetRepository.update(session.assetId, {
-      status: AssetStatus.AVAILABLE,
-      currentSession: null
+    await assetRepository.update(session.asset.id, {
+      status: AssetStatus.AVAILABLE
     });
 
     await sessionRepository.delete({ token });
 
-    logger.info('⏰ Session expired', { token, assetId: session.assetId });
+    logger.info('⏰ Session expired', { token, assetId: session.asset.id });
   }
 }
