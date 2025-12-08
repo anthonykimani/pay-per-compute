@@ -64,6 +64,7 @@ export class AssetService {
             type: data.type!,
             status: AssetStatus.AVAILABLE,
             merchantWallet: data.merchantWallet!,
+            merchantId: data.merchantId!,
             metadata: data.metadata || {}
         });
 

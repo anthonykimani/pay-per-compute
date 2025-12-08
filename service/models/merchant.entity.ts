@@ -1,4 +1,4 @@
-import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
+import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { Asset } from "./asset.entity";
 
 @Entity('merchants')
@@ -23,4 +23,10 @@ export class Merchant {
 
   @OneToMany(() => Asset, asset => asset.merchant, { cascade: ['remove'] })
   assets!: Asset[];
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 }

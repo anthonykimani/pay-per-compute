@@ -3,8 +3,12 @@ import assetsRoutes from '../v1/index.asset';
 import paymentsRoutes from '../v1/index.payments';
 import merchantRoutes from '../v1/index.merchant';
 import sessionsRoutes from '../v1/index.session';
+import authRoutes from '../v1/index.auth';
 
 const router = Router();
+
+// Auth routes -- Global Access
+router.use('/auth', authRoutes);
 
 // Versioned API routes
 router.use('/v1/assets', assetsRoutes);

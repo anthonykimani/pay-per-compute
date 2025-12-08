@@ -23,8 +23,6 @@ const envSchema = z.object({
     PAYMENT_TIMEOUT: z.coerce.number().default(300),
     UNIT_TYPE: z.enum(['minute', 'hour', 'day', 'session']).default('minute'),
     ACCEPTED_TOKENS: z.string().default('USDC'),
-
-    MERCHANT_API_KEY: z.string().min(32).default('dev-key-change-in-production')
 });
 
 export const ENV = envSchema.parse(process.env);
