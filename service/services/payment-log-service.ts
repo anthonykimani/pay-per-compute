@@ -41,15 +41,15 @@ export class PaymentLogService {
     };
   }
 
-  static async verifyPayment(signature: string, expectedAmount: string) {
+  static async verifyPayment(signature: string, expectedAmount: string, data: Partial<PaymentLog>) {
     try {
       const response = await axios.post(
         `${ENV.PAYAI_FACILITATOR_URL}/verify`,
         {
           signature,
-          network: ENV.SOLANA_NETWORK,
+          network: ENV.PAYAI_NETWORK,
           expectedAmount,
-          merchantWallet: ENV.MERCHANT_WALLET
+          merchantWallet: data.payerWallet
         },
         {
           headers: {

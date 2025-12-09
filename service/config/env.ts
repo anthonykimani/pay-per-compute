@@ -12,8 +12,8 @@ const envSchema = z.object({
     PAYAI_FACILITATOR_URL: z.string().url(),
     PAYAI_API_KEY: z.string().min(1),
     PAYAI_VERSION: z.string().default('2024-01-24'),
+    PAYAI_NETWORK: z.enum(['base-sepolia', 'base', 'solana-devnet', 'solana']).default('solana-devnet'),
 
-    SOLANA_NETWORK: z.enum(['devnet', 'mainnet-beta']).default('devnet'),
     SOLANA_RPC: z.string().url(),
     MERCHANT_WALLET: z.string().min(32),
 

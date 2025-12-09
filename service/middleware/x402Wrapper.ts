@@ -18,11 +18,11 @@ const paymentLogRepository = AppDataSource.getRepository(PaymentLog);
  */
 export const createAssetPaymentMiddleware = (asset: Asset) => {
   return paymentMiddleware(
-    ENV.MERCHANT_WALLET as `0x${string}`,
+    ENV.MERCHANT_WALLET,
     {
       "*": {
         price: asset.pricePerUnit, 
-        network: ENV.SOLANA_NETWORK as any,
+        network: ENV.PAYAI_NETWORK as any,
         config: {
           description: `Access to ${asset.name}`,
           maxTimeoutSeconds: ENV.PAYMENT_TIMEOUT
@@ -124,7 +124,7 @@ export const paymentErrorHandler = (
       'x-cost': error.expectedPrice,
       'x-address': ENV.MERCHANT_WALLET,
       'x-facilitator': ENV.PAYAI_FACILITATOR_URL,
-      'x-network': ENV.SOLANA_NETWORK,
+      'x-network': ENV.PAYAI_NETWORK,
       'x-unit': ENV.UNIT_TYPE,
       'x-asset-id': req.params.assetId
     });

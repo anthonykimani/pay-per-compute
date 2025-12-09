@@ -20,7 +20,7 @@ const bootstrap = async () => {
       logger.info(`🚀 PayPerCompute Backend v2.0.0 started`, {
         port: ENV.PORT,
         env: ENV.NODE_ENV,
-        network: ENV.SOLANA_NETWORK,
+        network: ENV.PAYAI_NETWORK,
         facilitator: ENV.PAYAI_FACILITATOR_URL
       });
     });
