@@ -1,3 +1,4 @@
+import { MoreThan } from 'typeorm';
 import { AppDataSource } from '../config/database';
 import { AssetStatus } from '../enums/asset-status.enum';
 import { UnitType } from '../enums/unit-type.enum';
@@ -6,19 +7,27 @@ import { Session } from '../models/session.entity';
 import logger from '../utils/logger';
 
 const assetRepository = AppDataSource.getRepository(Asset);
+const sessionRepository = AppDataSource.getRepository(Session)
 
 export class AssetService {
     static async getAll() {
         return assetRepository.find({
-            relations: ['currentSession'],
+            relations: ['merchant'],
             order: { createdAt: 'DESC' }
         });
     }
 
     static async getById(id: string) {
         return assetRepository.findOne({
+            relations: ['merchant'],
             where: { id },
-            relations: ['currentSession']
+        });
+    }
+
+    static async getByMerchant(merchantId: string) {
+        return assetRepository.find({
+            where: { merchantId },
+            relations: ['merchant']
         });
     }
 
@@ -28,13 +37,23 @@ export class AssetService {
             throw new Error(`Asset ${assetId} not found`);
         }
 
+        const currentSession = await this.getCurrentSession(assetId);
+
         return {
             id: asset.id,
             name: asset.name,
             status: asset.status,
             type: asset.type,
-            currentSession: asset.currentSession
+            currentSession: currentSession || null
         };
+    }
+
+    static async getCurrentSession(assetId: string) {
+        return sessionRepository.findOne({
+            where: { asset: { id: assetId }, expiresAt: MoreThan(new Date()) },
+            relations: ['asset'],
+            order: { createdAt: 'DESC' }
+        });
     }
 
     static async create(data: Partial<Asset>) {
@@ -45,6 +64,7 @@ export class AssetService {
             type: data.type!,
             status: AssetStatus.AVAILABLE,
             merchantWallet: data.merchantWallet!,
+            merchantId: data.merchantId!,
             metadata: data.metadata || {}
         });
 
@@ -54,8 +74,7 @@ export class AssetService {
     static async unlock(assetId: string, sessionToken: string) {
         // ✅ Pass a partial Session object with the token (primary key)
         const result = await assetRepository.update(assetId, {
-            status: AssetStatus.OCCUPIED,
-            currentSession: { token: sessionToken } as Partial<Session> // Type assertion for safety
+            status: AssetStatus.OCCUPIED
         });
 
         if (result.affected === 0) {
@@ -67,8 +86,7 @@ export class AssetService {
 
     static async lock(assetId: string) {
         const result = await assetRepository.update(assetId, {
-            status: AssetStatus.AVAILABLE,
-            currentSession: null
+            status: AssetStatus.AVAILABLE
         });
 
         if (result.affected === 0) {
@@ -79,18 +97,10 @@ export class AssetService {
     }
 
     static async updatePrice(assetId: string, pricePerUnit: string, unit: UnitType) {
-        const result = await assetRepository.update(assetId, {
-            pricePerUnit,
-            unit // ✅ Already typed as UnitType enum
-        });
-
-        if (result.affected === 0) {
-            throw new Error(`Asset ${assetId} not found`);
-        }
-
+        await this.updateAsset(assetId, { pricePerUnit, unit });
         logger.info('💰 Asset price updated', { assetId, pricePerUnit, unit });
     }
-
+    
     // Add this method to your existing AssetService class
     static async updateAsset(id: string, updateData: Partial<Asset>) {
         const result = await assetRepository.update(id, updateData);

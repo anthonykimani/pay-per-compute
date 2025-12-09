@@ -11,7 +11,7 @@ export const timeUntilExpiry = (expiresAt: Date): number => {
 };
 
 export const generateSessionToken = (): string => {
-  return `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  return `sess_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 };
 
 export const isValidSolanaAddress = (address: string): boolean => {

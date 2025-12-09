@@ -1,14 +1,15 @@
-import { Entity, PrimaryColumn, Column, OneToOne, JoinColumn, Index, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, Column, OneToOne, JoinColumn, Index, CreateDateColumn, UpdateDateColumn, PrimaryGeneratedColumn, ManyToOne } from 'typeorm';
 import { UnitType } from '../enums/unit-type.enum';
 import { AssetType } from '../enums/asset-type.enum';
 import { AssetStatus } from '../enums/asset-status.enum';
-import { Session } from './session.entity';
+import { Merchant } from './merchant.entity';
 
 
 @Entity('assets')
 @Index(['status', 'type'])
+@Index(['merchantId'])
 export class Asset {
-  @PrimaryColumn('uuid')
+  @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column({ type: 'varchar', length: 255 })
@@ -26,15 +27,18 @@ export class Asset {
   @Column({ type: 'enum', enum: AssetStatus, default: AssetStatus.AVAILABLE })
   status: AssetStatus;
 
-  @Column({ type: 'varchar', length: 44 })
+  @Column({ name: 'merchant_wallet', type: 'varchar', length: 44 })
   merchantWallet: string;
-
-  @OneToOne(() => Session, { nullable: true })
-  @JoinColumn({ name: 'current_session_token' })
-  currentSession: Session | null;
 
   @Column({ type: 'jsonb', nullable: true })
   metadata: Record<string, any>;
+
+  @ManyToOne(() => Merchant, merchant => merchant.assets)
+  @JoinColumn({ name: 'merchant_id' })
+  merchant!: Merchant;
+
+  @Column({ name: 'merchant_id' })
+  merchantId!: string;
 
   @CreateDateColumn()
   createdAt: Date;

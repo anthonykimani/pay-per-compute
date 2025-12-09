@@ -12,8 +12,8 @@ const envSchema = z.object({
     PAYAI_FACILITATOR_URL: z.string().url(),
     PAYAI_API_KEY: z.string().min(1),
     PAYAI_VERSION: z.string().default('2024-01-24'),
+    PAYAI_NETWORK: z.enum(['base-sepolia', 'base', 'solana-devnet', 'solana']).default('solana-devnet'),
 
-    SOLANA_NETWORK: z.enum(['devnet', 'mainnet-beta']).default('devnet'),
     SOLANA_RPC: z.string().url(),
     MERCHANT_WALLET: z.string().min(32),
 
@@ -23,8 +23,6 @@ const envSchema = z.object({
     PAYMENT_TIMEOUT: z.coerce.number().default(300),
     UNIT_TYPE: z.enum(['minute', 'hour', 'day', 'session']).default('minute'),
     ACCEPTED_TOKENS: z.string().default('USDC'),
-
-    MERCHANT_API_KEY: z.string().min(32).default('dev-key-change-in-production')
 });
 
 export const ENV = envSchema.parse(process.env);

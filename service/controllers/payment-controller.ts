@@ -1,14 +1,13 @@
 import { Request, Response } from 'express';
 import { SessionService } from '../services/session-service';
-
-import { Asset } from '../models/asset.entity';
 import { ENV } from '../config/env';
 import logger from '../utils/logger';
+import { Session } from '../models/session.entity';
 
 export class PaymentController {
   static async access(req: Request, res: Response) {
     const { assetId } = req.params;
-    const session = (req as any).session; // From postPaymentProcessor
+    const session = (req as any).session as Session; // From postPaymentProcessor
 
     logger.info('🎉 Access granted', {
       assetId,
@@ -19,7 +18,7 @@ export class PaymentController {
     res.json({
       status: 'granted',
       sessionToken: session.token,
-      minutesPurchased: calculateMinutes(session.amountPaid, session.asset),
+      minutesPurchased: SessionService.calculateMinutes(session.amountPaid, session.asset.pricePerUnit, session.asset.unit),
       expiresAt: session.expiresAt,
       accessUrl: `/api/v1/assets/${assetId}/use`,
       websocketUrl: `ws://localhost:${ENV.PORT}?token=${session.token}`
@@ -38,7 +37,7 @@ export class PaymentController {
         });
       }
 
-      const minutesLeft = Math.ceil((session.expiresAt.getTime() - Date.now()) / 60000);
+      const minutesLeft = SessionService.calculateMinutesLeft(session.expiresAt);
 
       res.json({
         status: 'active',
@@ -55,7 +54,7 @@ export class PaymentController {
   static async extend(req: Request, res: Response) {
     try {
       const { token } = req.params;
-      const { additionalAmount } = req.body; // ✅ Get amount from body, not req.session
+      const { additionalAmount } = req.body;
 
       const extendedSession = await SessionService.extendSession(token, additionalAmount);
 
@@ -67,24 +66,5 @@ export class PaymentController {
       logger.error('❌ Failed to extend session', { error });
       res.status(400).json({ error: 'Session extension failed' });
     }
-  }
-}
-
-// ✅ Fixed to respect unit type (hour/day/session)
-function calculateMinutes(amountPaid: string, asset: Asset): number {
-  const amount = parseFloat(amountPaid);
-  const price = parseFloat(asset.pricePerUnit);
-  const baseMinutes = amount / price;
-
-  switch (asset.unit) {
-    case 'hour':
-      return baseMinutes * 60;
-    case 'day':
-      return baseMinutes * 60 * 24;
-    case 'session':
-      return baseMinutes; // Session-based assets don't convert
-    case 'minute':
-    default:
-      return baseMinutes;
   }
 }

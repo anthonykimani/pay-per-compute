@@ -23,7 +23,7 @@ router.get('/:token/status', async (req: Request, res: Response) => {
       status: isActive ? 'active' : 'expired',
       data: {
         token: session.token,
-        assetId: session.assetId,
+        assetId: session.asset.id,
         payerWallet: session.payerWallet,
         expiresAt: session.expiresAt,
         minutesLeft
