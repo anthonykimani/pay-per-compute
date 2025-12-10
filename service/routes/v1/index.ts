@@ -3,6 +3,7 @@ import assetsRoutes from '../v1/index.asset';
 import paymentsRoutes from '../v1/index.payments';
 import merchantRoutes from '../v1/index.merchant';
 import sessionsRoutes from '../v1/index.session';
+import agentRoutes from '../v1/index.agent';
 import authRoutes from '../v1/index.auth';
 
 const router = Router();
@@ -15,6 +16,7 @@ router.use('/v1/assets', assetsRoutes);
 router.use('/v1/access', paymentsRoutes);
 router.use('/v1/merchant', merchantRoutes);
 router.use('/v1/sessions', sessionsRoutes);
+router.use('/v1/agent', agentRoutes);
 
 // Health check
 router.get('/health', (req: Request, res: Response) => {
