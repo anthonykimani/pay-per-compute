@@ -48,7 +48,7 @@ export function AgentChat({ onIntentCreated }: AgentChatProps) {
       const messageBytes = new TextEncoder().encode(message);
       const signature = await signMessage(messageBytes);
       
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/agent/intents`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_PAY_PER_COMPUTE_URL}/api/v1/agent/intents`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

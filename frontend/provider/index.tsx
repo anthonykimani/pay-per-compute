@@ -1,26 +1,20 @@
-
 'use client';
 
-import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
-import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
-import { clusterApiUrl } from '@solana/web3.js';
-import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
-import { PhantomWalletAdapter } from '@solana/wallet-adapter-phantom';
-import { useMemo } from 'react';
 
-// Import wallet adapter CSS
-import '@solana/wallet-adapter-react-ui/styles.css';
+import { Toaster } from '@/components/ui/sonner'; 
+import { WalletProviders } from './wallet-providers';
+import { SocketProvider } from './socket-provider';
+import { QueryProvider } from './query-provider';
 
-export function WalletProviders({ children }: { children: React.ReactNode }) {
-  const network = WalletAdapterNetwork.Devnet;
-  const endpoint = useMemo(() => clusterApiUrl(network), [network]);
-  const wallets = useMemo(() => [new PhantomWalletAdapter()], []);
-
+export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <ConnectionProvider endpoint={endpoint}>
-      <WalletProvider wallets={wallets} autoConnect>
-        <WalletModalProvider>{children}</WalletModalProvider>
-      </WalletProvider>
-    </ConnectionProvider>
+    <WalletProviders>
+      <QueryProvider>
+        <SocketProvider>
+          {children}
+          <Toaster position="top-right" expand={false} />
+        </SocketProvider>
+      </QueryProvider>
+    </WalletProviders>
   );
 }
