@@ -2,13 +2,15 @@
 'use client';
 
 import { useState } from 'react';
-import { useWallet, useConnection } from '@solana/wallet-adapter-react';
-import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import { useWallet, useConnection,  ConnectionProvider,
+  WalletProvider } from '@solana/wallet-adapter-react';
+import { WalletMultiButton, WalletModalProvider} from '@solana/wallet-adapter-react-ui';
+import { WalletAdapterNetwork } from "@solana/wallet-adapter-base";
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Send, Bot, User } from 'lucide-react';
 import bs58 from 'bs58';
 
