@@ -10,9 +10,15 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 1000 * 60 * 5, // 5 minutes
+            staleTime: 1000 * 60 * 5,
             retry: 3,
             refetchOnWindowFocus: false,
+            refetchOnReconnect: true,
+          },
+          mutations: {
+            onError: (error) => {
+              console.error('Mutation error:', error);
+            },
           },
         },
       })

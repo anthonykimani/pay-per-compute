@@ -1,17 +1,18 @@
-import { apiClient } from "@/shared/api.config";
-import { PaymentAuthorization, PaymentRequirement, Session } from "@/types/common";
+import { apiClient } from '@/shared/api.config';
+import { PaymentAuthorization, Session } from '../types';
 
 export const paymentsApi = {
   initiate: (assetId: string) =>
-    apiClient.post<PaymentRequirement>(`/api/v1/access/${assetId}`, undefined, {
-      // This will return 402 with payment requirements
-      // We'll handle this specially in the hook
-    }),
+    apiClient.post<never>(`/api/v1/access/${assetId}`),
 
-  access: (assetId: string, paymentAuth: PaymentAuthorization) =>
-    apiClient.post<Session>(`/api/v1/access/${assetId}`, undefined, {
-      'x-payment-authorization': `PAY2 ${btoa(JSON.stringify(paymentAuth))}`,
-    }),
+  access: (assetId: string, auth: PaymentAuthorization) =>
+    apiClient.post<Session>(
+      `/api/v1/access/${assetId}`,
+      undefined,
+      {
+        'x-payment-authorization': `PAY2 ${btoa(JSON.stringify(auth))}`,
+      }
+    ),
 
   extend: (token: string, additionalAmount: string) =>
     apiClient.post<Session>(`/api/v1/access/sessions/${token}/extend`, {

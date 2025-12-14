@@ -22,7 +22,9 @@ export const corsConfig = {
     'Content-Type', 
     'Authorization', 
     'x402-payment', 
-    'x-api-key'
+    'x-api-key',
+    'x-user-wallet',
+    'x-payment-authorization'
   ],
   exposedHeaders: [
     'x-cost', 

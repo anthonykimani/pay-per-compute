@@ -2,37 +2,61 @@
 import { Server } from 'socket.io';
 import http from 'http';
 import logger from '../utils/logger';
+import { ENV } from '../config/env';
 
 let io: Server | null = null;
 
 export const initializeWebSocket = (server: http.Server): void => {
+  const corsOrigins = ENV.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'];
+  
   io = new Server(server, {
     cors: {
-      origin: '*',
-      methods: ['GET', 'POST']
-    }
+      origin: corsOrigins,
+      methods: ['GET', 'POST'],
+      credentials: true,
+    },
+    pingTimeout: 60000,
+    pingInterval: 25000,
   });
 
   io.on('connection', (socket) => {
-    logger.info('🔌 WebSocket client connected', { socketId: socket.id });
+    logger.info('🔌 WebSocket client connected', { 
+      socketId: socket.id,
+      ip: socket.handshake.address 
+    });
 
-    // User subscribes to their wallet events
+    // Error handling
+    socket.on('error', (err) => {
+      logger.error('Socket error:', { socketId: socket.id, error: err });
+    });
+
     socket.on('subscribe:user', (walletAddress: string) => {
+      if (!walletAddress) {
+        logger.warn('Invalid wallet subscription attempt', { socketId: socket.id });
+        return;
+      }
       socket.join(`user:${walletAddress}`);
-      logger.info(`👤 User subscribed`, { walletAddress });
+      logger.info(`👤 User subscribed`, { walletAddress, socketId: socket.id });
     });
 
-    // Merchant subscribes via API key
     socket.on('subscribe:merchant', (apiKey: string) => {
+      if (!apiKey) {
+        logger.warn('Invalid merchant subscription attempt', { socketId: socket.id });
+        return;
+      }
       socket.join(`merchant:${apiKey}`);
-      logger.info(`🏪 Merchant subscribed`, { apiKey: apiKey.slice(-6) });
+      logger.info(`🏪 Merchant subscribed`, { apiKey: apiKey.slice(-6), socketId: socket.id });
     });
 
-    socket.on('disconnect', () => {
-      logger.info('🔌 WebSocket client disconnected', { socketId: socket.id });
+    socket.on('disconnect', (reason) => {
+      logger.info('🔌 WebSocket client disconnected', { 
+        socketId: socket.id, 
+        reason 
+      });
     });
   });
 };
+
 
 /**
  * Broadcast agent log to specific user

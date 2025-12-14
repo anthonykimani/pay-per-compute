@@ -1,9 +1,9 @@
-import { apiClient } from "@/shared/api.config";
-import { Asset, AssetFilters, PaginatedResponse } from "@/types/common";
+
+import { apiClient } from '@/shared/api.config';
+import { Asset, AssetFilters, PaginatedResponse } from '../types';
 
 export const assetsApi = {
   getAll: (filters?: AssetFilters, page = 1) => {
-    // Convert all filter values to strings for URLSearchParams
     const params = new URLSearchParams();
     params.append('page', page.toString());
     

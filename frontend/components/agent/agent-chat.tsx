@@ -1,10 +1,8 @@
-// src/components/agent/agent-chat.tsx
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,8 +11,9 @@ import { Loader2, Bot, Send } from 'lucide-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
-import { cn } from '@/lib/utils';
 import { useCreateIntent } from '@/hooks/use-agent-intent';
+import { parseError } from '@/lib/error';
+
 
 const formSchema = z.object({
   message: z.string().min(10, 'Be more specific about your compute needs'),
@@ -22,10 +21,14 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-export function AgentChat({ onIntentCreated }: { onIntentCreated: (id: string) => void }) {
+interface AgentChatProps {
+  onIntentCreated: (id: string) => void;
+}
+
+export function AgentChat({ onIntentCreated }: AgentChatProps) {
   const wallet = useWallet();
   const { toast } = useToast();
-  const createIntent = useCreateIntent();
+  const createIntent = useCreateIntent(wallet);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -45,20 +48,21 @@ export function AgentChat({ onIntentCreated }: { onIntentCreated: (id: string) =
       onIntentCreated(result.intentId);
       toast({
         title: 'Intent Created',
-        description: 'Agent is now scanning the marketplace...',
+        description: 'AI agent is scanning the marketplace...',
         variant: 'success',
       });
     } catch (error) {
+      const parsedError = parseError(error);
       toast({
         title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to create intent',
+        description: parsedError.message,
         variant: 'destructive',
       });
     }
   };
 
   return (
-    <Card className="w-full max-w-2xl mx-auto">
+    <Card className="w-full">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Bot className="h-5 w-5" />

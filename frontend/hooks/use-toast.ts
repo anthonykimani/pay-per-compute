@@ -1,7 +1,7 @@
-// src/hooks/use-toast.ts
 'use client';
 
-import { toast as sonnerToast, ToastT } from 'sonner';
+import { toast as sonnerToast } from 'sonner';
+import type { ToastT } from 'sonner';
 
 type ToastVariant = 'default' | 'destructive' | 'success';
 
@@ -15,8 +15,8 @@ interface ToastProps {
 export function useToast() {
   const toast = ({ title, description, variant = 'default', duration = 4000 }: ToastProps) => {
     const options: ToastT = {
-        duration,
-        id: ''
+      duration,
+      id: ''
     };
 
     switch (variant) {

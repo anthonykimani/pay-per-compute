@@ -1,10 +1,9 @@
 'use client';
 
-
-import { Toaster } from '@/components/ui/sonner'; 
 import { WalletProviders } from './wallet-providers';
 import { SocketProvider } from './socket-provider';
 import { QueryProvider } from './query-provider';
+import { Toaster } from '@/components/ui/sonner';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
