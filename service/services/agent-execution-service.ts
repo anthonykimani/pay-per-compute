@@ -59,7 +59,6 @@ export class AgentExecutionService {
       // Find matching available assets
       const availableAssets = await assetRepository.find({
         where: {
-          type: intent.assetType as AssetType,
           status: AssetStatus.AVAILABLE,
           pricePerUnit: LessThanOrEqual(intent.maxPricePerUnit)
         },

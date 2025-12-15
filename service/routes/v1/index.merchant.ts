@@ -9,6 +9,8 @@ router.use(verifyApiKey); // ✅ Apply to all routes
 
 router.get('/assets', apiKeyLimiter, MerchantController.getAssets);
 router.get('/earnings', apiKeyLimiter, MerchantController.getEarnings);
+router.post('/assets', apiKeyLimiter, MerchantController.createAsset);
 router.patch('/assets/:id', apiKeyLimiter, MerchantController.updateAsset);
+
 
 export default router;

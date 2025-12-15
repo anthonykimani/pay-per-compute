@@ -1,3 +1,5 @@
+import { PaymentLog } from "./payment";
+
 export interface Merchant {
   id: string;
   name: string;
@@ -7,4 +9,10 @@ export interface Merchant {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface MerchantEarningsData {
+  totalEarnings: string;
+  paymentCount: number;
+  payments: PaymentLog[];
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CheckCircle, AlertCircle, Loader2, Clock, DollarSign, Package } from 'lucide-react';
@@ -17,22 +17,58 @@ interface AgentFeedProps {
 export function AgentFeed({ intentId, userWallet }: AgentFeedProps) {
   const [logs, setLogs] = useState<AgentLog[]>([]);
   const { subscribeToWallet, onAgentLog, connected } = useSocket();
+  const mountedRef = useRef(false);
+
+  // ✅ Normalize wallet
+  const normalizedWallet = userWallet.toLowerCase();
 
   useEffect(() => {
-    if (!connected) return;
+    // ✅ Prevent duplicate subscriptions on hot reload
+    if (mountedRef.current) return;
+    mountedRef.current = true;
+
+    if (!connected) {
+      console.log('🐞 AGENT FEED: Socket not connected yet');
+      return;
+    }
     
+    if (!intentId || !normalizedWallet) {
+      console.warn('🐞 AGENT FEED: Missing intentId or wallet', { intentId, normalizedWallet });
+      return;
+    }
+    
+    console.log('🐞 AGENT FEED: Mounting component, subscribing to agent updates...');
+
+    // ✅ CRITICAL: Subscribe FIRST, then attach listener
+    console.log('🐞 AGENT FEED: Subscribing to wallet:', normalizedWallet);
+    subscribeToWallet(normalizedWallet);
+
     const unsubscribe = onAgentLog((log) => {
+      console.log('🐞 AGENT FEED: Received log', {
+        logIntentId: log.intentId,
+        componentIntentId: intentId,
+        matches: log.intentId === intentId,
+        logMessage: log.message
+      });
+      
       if (log.intentId === intentId) {
-        setLogs(prev => [log, ...prev]);
+        console.log('🐞 AGENT FEED: ✅ Log matches intent, adding to state');
+        setLogs(prev => {
+          const newLogs = [log, ...prev];
+          console.log('🐞 AGENT FEED: New logs count:', newLogs.length);
+          return newLogs;
+        });
+      } else {
+        console.log('🐞 AGENT FEED: ❌ Log ignored (different intent)');
       }
     });
 
-    subscribeToWallet(userWallet);
-
     return () => {
+      console.log('🐞 AGENT FEED: Unmounting, cleaning up...');
       unsubscribe();
+      mountedRef.current = false;
     };
-  }, [intentId, userWallet, subscribeToWallet, onAgentLog, connected]);
+  }, [intentId, normalizedWallet, subscribeToWallet, onAgentLog, connected]);
 
   const getIcon = (level: AgentLog['level']) => {
     const icons = {
@@ -54,6 +90,25 @@ export function AgentFeed({ intentId, userWallet }: AgentFeedProps) {
     return colors[level];
   };
 
+  // ✅ Debug: Log render with current state
+  console.log('🐞 AGENT FEED: Rendering', {
+    intentId,
+    userWallet: normalizedWallet,
+    connected,
+    logsCount: logs.length,
+  });
+
+  if (!connected) {
+    return (
+      <Card className="p-8">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Connecting to agent...
+        </div>
+      </Card>
+    );
+  }
+
   return (
     <Card className="w-full">
       <CardHeader>
@@ -61,33 +116,32 @@ export function AgentFeed({ intentId, userWallet }: AgentFeedProps) {
       </CardHeader>
       <CardContent>
         <ScrollArea className="h-80">
-          {!connected ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Connecting to agent...
+          {logs.length === 0 ? (
+            <div className="text-sm text-muted-foreground space-y-2">
+              <p>Waiting for agent updates...</p>
+              <p className="text-xs">Intent: {intentId}</p>
+              <p className="text-xs">Wallet: {normalizedWallet.slice(0, 8)}...</p>
             </div>
-          ) : logs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Waiting for agent updates...</p>
           ) : (
             <div className="space-y-3">
               {logs.map((log, i) => {
                 const Icon = getIcon(log.level);
                 const color = getColor(log.level);
                 return (
-                  <div key={`${log.timestamp.toISOString()}-${i}`} className="p-3 rounded-lg border bg-secondary/50">
+                  <div key={`${log.intentId}-${i}-${log.timestamp}`} className="p-3 rounded-lg border bg-secondary/50">
                     <div className="flex items-start gap-2">
-                      <Icon className={cn('h-5 w-5 mt-0.5 flex-shrink-0 animate-pulse', color)} />
-                      <div className="flex-1 space-y-2">
+                      <Icon className={cn('h-5 w-5 mt-0.5 flex-shrink-0', color)} />
+                      <div className="flex-1 space-y-1">
                         <p className="text-sm font-medium">{log.message}</p>
                         {log.asset && (
-                          <p className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Package className="h-3 w-3" />
+                          <p className="text-xs text-muted-foreground">
+                            <Package className="inline h-3 w-3 mr-1" />
                             {log.asset.name} @ ${log.asset.pricePerUnit}/{log.asset.unit}
                           </p>
                         )}
                         {log.totalCost && (
-                          <p className="text-xs font-medium text-primary flex items-center gap-1">
-                            <DollarSign className="h-3 w-3" />
+                          <p className="text-xs font-medium text-primary">
+                            <DollarSign className="inline h-3 w-3 mr-1" />
                             Total: ${log.totalCost}
                           </p>
                         )}

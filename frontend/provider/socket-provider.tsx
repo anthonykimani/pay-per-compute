@@ -12,6 +12,7 @@ interface SocketContextType {
   subscribeToIntent: (intentId: string) => void;
   subscribeToWallet: (wallet: string) => void;
   onAgentLog: (handler: (log: AgentLog) => void) => () => void;
+  emit: (event: string, ...args: any[]) => void; // ✅ Add emit for debugging
 }
 
 const SocketContext = createContext<SocketContextType | undefined>(undefined);
@@ -25,15 +26,14 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const { toast } = useToast();
   const reconnectAttemptRef = useRef(0);
 
-  // ✅ FIX: Store toast in ref to prevent dependency changes
   const toastRef = useRef(toast);
   useEffect(() => {
     toastRef.current = toast;
   }, [toast]);
 
-  // ✅ FIX: EMPTY DEPENDENCY ARRAY - prevents infinite loops
   useEffect(() => {
     const socketUrl = env.NEXT_PUBLIC_BACKEND_URL || 'ws://localhost:3001';
+    console.log('🐞 SOCKET: Initializing connection to', socketUrl);
     
     const socketInstance = io(socketUrl, {
       transports: ['websocket', 'polling'],
@@ -42,71 +42,69 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       reconnectionDelay: RECONNECT_DELAY,
       timeout: 10000,
       autoConnect: true,
+      // ✅ Force immediate connection
+      forceNew: true,
     });
 
     socketInstance.on('connect', () => {
       setConnected(true);
       reconnectAttemptRef.current = 0;
-      console.log('✅ Socket connected to:', socketUrl);
+      console.log('✅ SOCKET: Connected successfully, ID:', socketInstance.id);
     });
 
     socketInstance.on('disconnect', (reason) => {
       setConnected(false);
-      console.log('❌ Socket disconnected:', reason);
-      
-      // ✅ FIX: Use toastRef.current
-      if (reason === 'io server disconnect') {
-        toastRef.current({
-          title: 'Session Ended',
-          description: 'You have been disconnected from the server',
-          variant: 'destructive',
-        });
-      }
+      console.log('❌ SOCKET: Disconnected. Reason:', reason);
     });
 
     socketInstance.on('connect_error', (error) => {
-      console.error('Socket connection error:', error.message);
+      console.error('SOCKET: Connection error:', error.message);
       reconnectAttemptRef.current++;
-      
-      // ✅ FIX: Use toastRef.current
-      if (reconnectAttemptRef.current >= MAX_RECONNECT_ATTEMPTS) {
-        toastRef.current({
-          title: 'Connection Failed',
-          description: 'Could not connect to server. Please refresh.',
-          variant: 'destructive',
-        });
-      }
     });
 
     socketInstance.on('reconnect_attempt', (attempt) => {
-      console.log(`🔄 Reconnection attempt ${attempt}/${MAX_RECONNECT_ATTEMPTS}`);
+      console.log(`🔄 SOCKET: Reconnection attempt ${attempt}/${MAX_RECONNECT_ATTEMPTS}`);
+    });
+
+    // ✅ CRITICAL: Log ALL incoming events
+    socketInstance.onAny((event, ...args) => {
+      console.log('📥 SOCKET: Received event:', event, 'Data:', args);
     });
 
     setSocket(socketInstance);
 
     return () => {
+      console.log('🔌 SOCKET: Cleaning up connection');
+      socketInstance.removeAllListeners();
       socketInstance.disconnect();
     };
-  }, []); // ✅ EMPTY ARRAY - no dependencies
+  }, []);
 
-  // ✅ FIX: Add null checks and proper cleanup
   const subscribeToIntent = useCallback((intentId: string) => {
-    if (!socket || !intentId) return;
+    if (!socket || !intentId) {
+      console.warn('🐞 SOCKET: Cannot subscribe - no socket or intentId');
+      return;
+    }
+    console.log('📡 SOCKET: Subscribing to intent:', intentId);
     socket.emit('subscribe:intent', intentId);
-    console.log('📡 Subscribed to intent:', intentId);
   }, [socket]);
 
   const subscribeToWallet = useCallback((wallet: string) => {
-    if (!socket || !wallet) return;
-    socket.emit('subscribe:user', wallet);
-    console.log('📡 Subscribed to wallet:', wallet);
+    if (!socket || !wallet) {
+      console.warn('🐞 SOCKET: Cannot subscribe - no socket or wallet');
+      return;
+    }
+    const normalizedWallet = wallet.toLowerCase();
+    console.log('📡 SOCKET: Subscribing to wallet:', normalizedWallet);
+    socket.emit('subscribe:user', normalizedWallet);
   }, [socket]);
 
   const onAgentLog = useCallback((handler: (log: AgentLog) => void) => {
     if (!socket) return () => {};
     
+    console.log('🐞 SOCKET: Attaching agent:log listener');
     const wrappedHandler = (log: AgentLog) => {
-      console.log('📥 Received agent log:', log);
+      console.log('📥 SOCKET: Received agent:log:', log);
       handler(log);
     };
     
@@ -116,12 +114,19 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     };
   }, [socket]);
 
+  // ✅ Allow direct emission for debugging
+  const emit = useCallback((event: string, ...args: any[]) => {
+    if (!socket) return;
+    socket.emit(event, ...args);
+  }, [socket]);
+
   const value: SocketContextType = {
     socket,
     connected,
     subscribeToIntent,
     subscribeToWallet,
     onAgentLog,
+    emit,
   };
 
   return <SocketContext.Provider value={value}>{children}</SocketContext.Provider>;
