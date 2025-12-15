@@ -1,5 +1,6 @@
 import { createApp } from './app';
 import { initializeDatabase } from './config/database';
+import { initializeWebSocket } from './websocket/index'; 
 import http from 'http';
 import { ENV } from './config/env';
 import logger from './utils/logger';
@@ -14,6 +15,8 @@ const bootstrap = async () => {
     
     // Create HTTP server
     const server = http.createServer(app);
+
+    initializeWebSocket(server);
 
     // Start server
     server.listen(ENV.PORT, () => {

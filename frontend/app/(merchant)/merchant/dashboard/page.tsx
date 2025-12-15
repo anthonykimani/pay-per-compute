@@ -19,8 +19,11 @@ export default function MerchantDashboard() {
     );
   }
 
-  const totalEarnings = earnings?.reduce((sum, e) => sum + parseFloat(e.amount), 0) || 0;
-  const totalSessions = earnings?.length || 0;
+  const totalEarnings = Array.isArray(earnings)
+    ? earnings.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0)
+    : 0;
+
+  const totalSessions = Array.isArray(earnings) ? earnings.length : 0;
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-8">

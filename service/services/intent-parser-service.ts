@@ -1,4 +1,3 @@
-// packages/backend/src/services/intent-parser-service.ts
 import { Agent, run } from '@openai/agents';
 import { z } from 'zod';
 import { ENV } from '../config/env';
@@ -17,8 +16,9 @@ export const ComputeIntentSchema = z.object({
   durationMinutes: z.number().int().min(1).max(480).default(30)
     .describe('Duration in minutes (default: 30 if not specified)'),
   
-  maxPricePerUnit: z.string().regex(/^\d+\.\d{6}$/)
-    .describe('Maximum price in USDC with 6 decimals (e.g., "0.080000")'),
+  // ✅  Make optional with fallback - AGENT MUST PROVIDE THIS
+  maxPricePerUnit: z.string().regex(/^\d+\.\d{6}$/).optional()
+    .describe('Maximum price in USDC with 6 decimals. Default: "0.100000" if not mentioned'),
   
   action: z.enum(['buy', 'extend', 'cancel']).default('buy')
     .describe('Action type: buy new session, extend existing, or cancel')
@@ -29,34 +29,42 @@ export type ComputeIntent = z.infer<typeof ComputeIntentSchema>;
 export class IntentParserService {
   /**
    * Parse natural language message into structured intent
-   * @param userMessage Raw user input (e.g., "RTX 4090 for 30 min under $0.08")
-   * @param userWallet Solana wallet address for context/logging
-   * @returns Structured ComputeIntent object
    */
   static async parse(userMessage: string, userWallet: string): Promise<ComputeIntent> {
     try {
       logger.info('🤖 Parsing intent', { userWallet, message: userMessage });
       
-      // ✅ FIX: Create agent fresh each time - no static property needed
+      if (!ENV.OPENAI_API_KEY) {
+        throw new Error('OPENAI_API_KEY not configured');
+      }
+
+      // ✅  CRITICAL - Give explicit DEFAULT behavior instructions
       const agent = Agent.create({
         name: 'ComputeIntentParser',
         model: 'gpt-4o-mini',
-        instructions: `You are a precise intent extraction agent. 
-          Extract compute rental requests into structured data.
+        instructions: `You are a precise intent extraction agent for compute rentals.
           
-          RULES:
-          1. assetType: Infer from context (gpu/cpu/printer/iot). Default to "gpu" if unclear.
-          2. assetName: Extract specific model names (RTX 4090, 3090, A100). Omit if generic.
-          3. durationMinutes: Extract minutes, hours (multiply by 60), or sessions. Default to 30.
-          4. maxPricePerUnit: USDC format with exactly 6 decimals. If user says "8 cents", use "0.080000".
-          5. action: Default to "buy". Only set "extend" if user mentions "extend" or "longer".
+          CRITICAL RULES - Never skip maxPricePerUnit:
+          1. ALWAYS extract maxPricePerUnit with 6 decimals
+          2. If user mentions ANY price, use that price
+          3. If user does NOT mention price, use DEFAULT: "0.100000"
+          4. Calculation examples:
+             - "$5 for 30 min" → "0.166667" (5/30 = 0.166667)
+             - "under 10 cents" → "0.100000"
+             - "budget $5" for 30 min → "0.166667"
+             - "3D printer for 2 hours" → "0.100000" (no price = default)
+          
+          DURATION:
+          - "30 min" → 30
+          - "1 hour" → 60
+          - "2 hours → 120
+          - Default: 30
+          
+          YOU MUST RETURN maxPricePerUnit. Never omit it.
           
           EXAMPLES:
-          - "Find me a 3090 for 30 min under $0.08" → {assetType: "gpu", assetName: "3090", durationMinutes: 30, maxPricePerUnit: "0.080000", action: "buy"}
-          - "Extend my session by 15 minutes" → {action: "extend", durationMinutes: 15}
-          - "Printer for 1 hour under $0.50" → {assetType: "printer", durationMinutes: 60, maxPricePerUnit: "0.500000"}
-          
-          RETURN ONLY VALID JSON. NO EXTRA TEXT.`,
+          - "RTX 4090 for 30 min under $0.08" → {"assetType":"gpu","assetName":"RTX 4090","durationMinutes":30,"maxPricePerUnit":"0.080000","action":"buy"}
+          - "3D printer for 2 hours" → {"assetType":"printer","durationMinutes":120,"maxPricePerUnit":"0.100000","action":"buy"}`,
         outputType: ComputeIntentSchema,
       });
       
@@ -66,16 +74,23 @@ export class IntentParserService {
         throw new Error('Agent returned empty output');
       }
 
-      logger.info('✅ Intent parsed', { 
+      // ✅  Enforce default if agent somehow still doesn't provide it
+      const parsedIntent = {
+        ...result.finalOutput,
+        maxPricePerUnit: result.finalOutput.maxPricePerUnit || '0.100000',
+      };
+
+      logger.info('✅ Intent parsed successfully', { 
         userWallet, 
-        parsed: result.finalOutput 
+        parsed: parsedIntent 
       });
 
-      return result.finalOutput;
+      return parsedIntent;
 
     } catch (error) {
       logger.error('❌ Intent parsing failed', { 
-        error, 
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
         userWallet, 
         message: userMessage 
       });
@@ -87,7 +102,7 @@ export class IntentParserService {
   }
 
   static validate(intent: ComputeIntent): void {
-    if (parseFloat(intent.maxPricePerUnit) <= 0) {
+    if (parseFloat(intent.maxPricePerUnit || '0.100000') <= 0) {
       throw new Error('Price must be greater than 0');
     }
     if (intent.durationMinutes < 1 || intent.durationMinutes > 480) {

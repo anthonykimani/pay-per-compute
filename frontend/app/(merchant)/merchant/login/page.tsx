@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Shield } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import Link from 'next/link';
 
 export default function MerchantLogin() {
   const [apiKey, setApiKey] = useState('');
@@ -46,6 +47,12 @@ export default function MerchantLogin() {
             Access Dashboard
           </Button>
         </CardContent>
+        <p className="text-xs text-gray-500 text-center mt-4">
+          Don't have an API key?
+          <Link href="/merchant/register" className="text-cyan-500 hover:underline">
+            Register here
+          </Link>
+        </p>
       </Card>
     </div>
   );

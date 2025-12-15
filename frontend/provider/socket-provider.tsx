@@ -25,15 +25,22 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const { toast } = useToast();
   const reconnectAttemptRef = useRef(0);
 
+  // ✅ FIX: Store toast in ref to prevent dependency changes
+  const toastRef = useRef(toast);
+  useEffect(() => {
+    toastRef.current = toast;
+  }, [toast]);
+
+  // ✅ FIX: EMPTY DEPENDENCY ARRAY - prevents infinite loops
   useEffect(() => {
     const socketUrl = env.NEXT_PUBLIC_BACKEND_URL || 'ws://localhost:3001';
     
     const socketInstance = io(socketUrl, {
-      transports: ['websocket', 'polling'], // Fallback to polling
+      transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
       reconnectionDelay: RECONNECT_DELAY,
-      timeout: 10000, // 10s connection timeout
+      timeout: 10000,
       autoConnect: true,
     });
 
@@ -46,8 +53,10 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     socketInstance.on('disconnect', (reason) => {
       setConnected(false);
       console.log('❌ Socket disconnected:', reason);
+      
+      // ✅ FIX: Use toastRef.current
       if (reason === 'io server disconnect') {
-        toast({
+        toastRef.current({
           title: 'Session Ended',
           description: 'You have been disconnected from the server',
           variant: 'destructive',
@@ -59,8 +68,9 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       console.error('Socket connection error:', error.message);
       reconnectAttemptRef.current++;
       
+      // ✅ FIX: Use toastRef.current
       if (reconnectAttemptRef.current >= MAX_RECONNECT_ATTEMPTS) {
-        toast({
+        toastRef.current({
           title: 'Connection Failed',
           description: 'Could not connect to server. Please refresh.',
           variant: 'destructive',
@@ -77,21 +87,32 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     return () => {
       socketInstance.disconnect();
     };
-  }, [toast]);
+  }, []); // ✅ EMPTY ARRAY - no dependencies
 
-  // Memoized handlers to prevent recreation
+  // ✅ FIX: Add null checks and proper cleanup
   const subscribeToIntent = useCallback((intentId: string) => {
-    socket?.emit('subscribe:intent', intentId);
+    if (!socket || !intentId) return;
+    socket.emit('subscribe:intent', intentId);
+    console.log('📡 Subscribed to intent:', intentId);
   }, [socket]);
 
   const subscribeToWallet = useCallback((wallet: string) => {
-    socket?.emit('subscribe:user', wallet);
+    if (!socket || !wallet) return;
+    socket.emit('subscribe:user', wallet);
+    console.log('📡 Subscribed to wallet:', wallet);
   }, [socket]);
 
   const onAgentLog = useCallback((handler: (log: AgentLog) => void) => {
-    socket?.on('agent:log', handler);
+    if (!socket) return () => {};
+    
+    const wrappedHandler = (log: AgentLog) => {
+      console.log('📥 Received agent log:', log);
+      handler(log);
+    };
+    
+    socket.on('agent:log', wrappedHandler);
     return () => {
-      socket?.off('agent:log', handler);
+      socket.off('agent:log', wrappedHandler);
     };
   }, [socket]);
 

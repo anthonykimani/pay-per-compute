@@ -1,4 +1,3 @@
-
 import { Request, Response } from 'express';
 import { IntentParserService } from '../services/intent-parser-service';
 import { AgentExecutionService } from '../services/agent-execution-service';
@@ -19,46 +18,91 @@ export class AgentController {
         return res.status(400).json({ error: 'Missing required fields' });
       }
 
+      // ✅ Add detailed validation logging
+      logger.debug('🔍 Validating signature', { userWallet, message: message.slice(0, 50) });
       const isValid = await verifySignature(message, signature, userWallet);
       if (!isValid) {
+        logger.warn('❌ Invalid signature', { userWallet });
         return res.status(401).json({ error: 'Invalid signature' });
       }
 
+      // ✅ Parse intent
+      logger.debug('🤖 Parsing intent', { message: message.slice(0, 100) });
       const parsedIntent = await IntentParserService.parse(message, userWallet);
       IntentParserService.validate(parsedIntent);
+      logger.debug('✅ Intent validation passed', { parsedIntent });
 
-      // ✅ FIX: Omit nullable fields entirely when not needed
+      // ✅ Ensure data is properly typed and sanitized
       const intentData = {
         userWallet,
         assetType: parsedIntent.assetType,
-        assetName: parsedIntent.assetName,
+        assetName: parsedIntent.assetName || null, // Use null instead of undefined
         durationMinutes: parsedIntent.durationMinutes,
         maxPricePerUnit: parsedIntent.maxPricePerUnit,
         action: parsedIntent.action,
         isFulfilled: false,
-        // selectedAssetId is omitted completely (not null, not undefined)
+        selectedAssetId: null, // Explicitly set to null
       };
 
+      // ✅ Add error handling around database insert
+      logger.debug('💾 Inserting intent to database');
       const insertResult = await agentIntentRepository.insert(intentData as any);
+      logger.debug('✅ Insert result', { insertResult });
 
-      const intentId = insertResult.identifiers[0].id as string;
-      const intent = await agentIntentRepository.findOne({ where: { id: intentId } });
-
-      if (!intent) {
-        throw new Error('Failed to retrieve created intent');
+      // ✅ Null check for identifiers
+      if (!insertResult.identifiers || !insertResult.identifiers[0]) {
+        throw new Error('Failed to get inserted intent ID');
       }
 
+      const intentId = insertResult.identifiers[0].id as string;
+      
+      // ✅ Use findOne with proper error handling
+      const intent = await agentIntentRepository.findOne({ 
+        where: { id: intentId },
+        relations: ['selectedAsset']
+      });
+
+      if (!intent) {
+        throw new Error('Failed to retrieve created intent from database');
+      }
+
+      // ✅ Verify intent has required fields
+      if (!intent.id || !intent.userWallet) {
+        throw new Error('Created intent is missing required fields');
+      }
+
+      logger.info('✅ Intent created successfully', { 
+        intentId: intent.id,
+        userWallet: intent.userWallet 
+      });
+
+      // ✅ Start execution AFTER successful save
       AgentExecutionService.executeIntents();
 
       res.status(201).json({
+        success: true,
         intentId: intent.id,
         status: 'created',
         parsed: parsedIntent
       });
 
     } catch (error) {
-      logger.error('❌ Failed to create intent', { error });
-      res.status(400).json({ error: error instanceof Error ? error.message : 'Failed' });
+      // ✅ Proper error serialization
+      const errorDetails = {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        name: error instanceof Error ? error.name : 'Unknown',
+      };
+      
+      logger.error('❌ Failed to create intent', { 
+        error: errorDetails,
+        body: req.body,
+        userWallet: req.headers['x-user-wallet'],
+      });
+      
+      res.status(400).json({ 
+        error: errorDetails.message 
+      });
     }
   }
 
@@ -92,7 +136,11 @@ export class AgentController {
       });
 
     } catch (error) {
-      logger.error('❌ Failed to get status', { error });
+      logger.error('❌ Failed to get status', { 
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        intentId: req.params.id
+      });
       res.status(500).json({ error: 'Failed to fetch status' });
     }
   }
@@ -125,7 +173,11 @@ export class AgentController {
       });
 
     } catch (error) {
-      logger.error('❌ Approval failed', { error });
+      logger.error('❌ Approval failed', { 
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        intentId: req.params.id
+      });
       res.status(500).json({ error: 'Approval failed' });
     }
   }

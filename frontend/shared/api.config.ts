@@ -1,5 +1,6 @@
-import { ApiError } from '../types/common';
-import { env } from '../config/env';
+
+import { env } from '@/config/env';
+import { ApiError } from '../types';
 
 class ApiClient {
   private baseUrl: string;
@@ -12,12 +13,36 @@ class ApiClient {
     };
   }
 
+  // ✅ NEW: Auto-inject merchant API key from cookie for merchant endpoints
+  private getAuthHeaders(endpoint: string): Record<string, string> {
+    const headers: Record<string, string> = {};
+    
+    // Inject merchant API key for merchant endpoints
+    if (endpoint.startsWith('/api/v1/merchant') || endpoint.startsWith('/api/v1/auth/regenerate-key')) {
+      const apiKey = this.getMerchantApiKeyFromCookie();
+      if (apiKey) {
+        headers['x-api-key'] = apiKey;
+      }
+    }
+    
+    return headers;
+  }
+
+  private getMerchantApiKeyFromCookie(): string | null {
+    if (typeof document === 'undefined') return null; // Server-side
+    const cookies = document.cookie.split('; ');
+    const apiKeyCookie = cookies.find(row => row.startsWith('merchant_api_key='));
+    return apiKeyCookie ? apiKeyCookie.split('=')[1] : null;
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
+    const authHeaders = this.getAuthHeaders(endpoint);
     const headers = {
       ...this.defaultHeaders,
+      ...authHeaders,
       ...options.headers,
     };
 
@@ -29,24 +54,18 @@ class ApiClient {
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       
-      // Extract payment requirement headers for 402 errors
-      let details = errorData;
-      if (response.status === 402) {
-        details = {
+      const error: ApiError = {
+        status: response.status,
+        code: errorData.code || 'UNKNOWN_ERROR',
+        message: errorData.message || 'An unknown error occurred',
+        details: response.status === 402 ? {
           cost: response.headers.get('x-cost'),
           address: response.headers.get('x-address'),
           facilitator: response.headers.get('x-facilitator'),
           network: response.headers.get('x-network'),
           unit: response.headers.get('x-unit'),
           assetId: endpoint.split('/').pop(),
-        };
-      }
-
-      const error: ApiError = {
-        status: response.status,
-        code: errorData.code || 'UNKNOWN_ERROR',
-        message: errorData.message || 'An unknown error occurred',
-        details,
+        } : undefined,
       };
       
       throw error;
@@ -56,9 +75,7 @@ class ApiClient {
   }
 
   async get<T>(endpoint: string, params?: Record<string, string>, customHeaders?: Record<string, string>) {
-    const url = params 
-      ? `${endpoint}?${new URLSearchParams(params)}` 
-      : endpoint;
+    const url = params ? `${endpoint}?${new URLSearchParams(params)}` : endpoint;
     return this.request<T>(url, { headers: customHeaders });
   }
 

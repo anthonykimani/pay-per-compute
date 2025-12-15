@@ -9,10 +9,12 @@ import { useMerchantEarnings } from '@/hooks/use-merchant';
 export function EarningsChart() {
   const { data: earnings } = useMerchantEarnings();
 
-  const chartData = earnings?.map(e => ({
-    date: new Date(e.createdAt).toLocaleDateString(),
-    amount: parseFloat(e.amount),
-  })) || [];
+  const chartData = Array.isArray(earnings) 
+  ? earnings.map(e => ({
+      date: new Date(e.createdAt).toLocaleDateString(),
+      amount: parseFloat(e.amount) || 0,
+    }))
+  : [];
 
   return (
     <Card>

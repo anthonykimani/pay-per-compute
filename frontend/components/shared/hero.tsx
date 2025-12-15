@@ -1,12 +1,36 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Bot, Zap, Shield, DollarSign } from 'lucide-react';
 import { AgentChat } from '@/components/agent/agent-chat';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export function Hero() {
   const [intentId, setIntentId] = useState<string | null>(null);
+  
+  // ✅ FIX: Initialize as null, generate only on client
+  const [particles, setParticles] = useState<Array<{
+    id: number;
+    initialX: number;
+    initialY: number;
+    animateX: number;
+    animateY: number;
+    duration: number;
+  }> | null>(null);
+
+  // ✅ FIX: Generate in useEffect (client-side only)
+  useEffect(() => {
+    const particleCount = 30;
+    const newParticles = [...Array(particleCount)].map((_, i) => ({
+      id: i,
+      initialX: Math.random() * window.innerWidth,
+      initialY: Math.random() * window.innerHeight,
+      animateX: Math.random() * window.innerWidth,
+      animateY: Math.random() * window.innerHeight,
+      duration: 15 + Math.random() * 10,
+    }));
+    setParticles(newParticles);
+  }, []);
 
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-purple-900 via-blue-900 to-black">
@@ -16,25 +40,23 @@ export function Hero() {
       </div>
 
       <div className="absolute inset-0 overflow-hidden">
-        {[...Array(50)].map((_, i) => (
-          <motion.div
-            key={i}
-            className="absolute w-1 h-1 bg-cyan-400 rounded-full"
-            initial={{
-              x: Math.random() * 1000,
-              y: Math.random() * 1000,
-            }}
-            animate={{
-              x: Math.random() * 1000,
-              y: Math.random() * 1000,
-            }}
-            transition={{
-              duration: 10 + Math.random() * 10,
-              repeat: Infinity,
-              repeatType: 'reverse',
-            }}
-          />
-        ))}
+        <AnimatePresence>
+          {/* ✅ FIX: Only render after particles are generated */}
+          {particles?.map((particle) => (
+            <motion.div
+              key={particle.id}
+              className="absolute w-1 h-1 bg-cyan-400 rounded-full"
+              initial={{ x: particle.initialX, y: particle.initialY, opacity: 0 }}
+              animate={{ x: particle.animateX, y: particle.animateY, opacity: [0, 0.8, 0] }}
+              transition={{
+                duration: particle.duration,
+                repeat: Infinity,
+                repeatType: 'reverse',
+                ease: 'linear',
+              }}
+            />
+          ))}
+        </AnimatePresence>
       </div>
 
       <div className="relative z-10 container mx-auto px-4 py-20">
