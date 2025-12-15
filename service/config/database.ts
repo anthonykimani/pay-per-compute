@@ -5,12 +5,13 @@ import { Session } from '../models/session.entity';
 import { PaymentLog } from '../models/paymentlog.entity';
 import { Merchant } from '../models/merchant.entity';
 import { PlatformConfig } from '../models/platform.entity';
+import { AgentIntent } from '../models/agent-intent.entity';
 
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
   url: ENV.DATABASE_URL,
-  entities: [Asset, Session, PaymentLog, Merchant, PlatformConfig],
+  entities: [Asset, Session, PaymentLog, Merchant, PlatformConfig, AgentIntent],
   synchronize: ENV.NODE_ENV === 'development',
   logging: ENV.NODE_ENV === 'development',
   migrations: ['dist/migrations/*.js'],

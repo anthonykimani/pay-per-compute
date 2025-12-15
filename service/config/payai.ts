@@ -8,7 +8,7 @@ export const payaiConfig = {
   },
   acceptedTokens: ENV.ACCEPTED_TOKENS.split(','),
   paymentTimeout: ENV.PAYMENT_TIMEOUT,
-  targetNetwork: ENV.SOLANA_NETWORK,
+  targetNetwork: ENV.PAYAI_NETWORK,
   
   // PayAI middleware options
   middleware: {

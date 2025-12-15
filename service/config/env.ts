@@ -14,6 +14,8 @@ const envSchema = z.object({
     PAYAI_VERSION: z.string().default('2024-01-24'),
     PAYAI_NETWORK: z.enum(['base-sepolia', 'base', 'solana-devnet', 'solana']).default('solana-devnet'),
 
+    OPENAI_API_KEY: z.string().min(1, 'OpenAI API key is required for intent parsing'),
+
     SOLANA_RPC: z.string().url(),
     MERCHANT_WALLET: z.string().min(32),
 

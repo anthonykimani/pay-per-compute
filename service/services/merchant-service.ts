@@ -30,7 +30,7 @@ export class MerchantService {
     const existing = await merchantRepository.findOne({
       where: [
         { walletAddress: data.walletAddress },
-        { apiKey: this.generateApiKey() } // Ensure uniqueness
+        { apiKey: this.generateApiKey() }
       ]
     });
     

@@ -1,3 +1,24 @@
+// /types/common.ts
+export class ApiError extends Error {
+  status: number;
+  code: string;
+  details?: unknown;
+
+  constructor(config: { status: number; code: string; message: string; details?: unknown }) {
+    super(config.message);
+    this.name = 'ApiError';
+    this.status = config.status;
+    this.code = config.code;
+    this.details = config.details;
+    
+    // ✅ Maintain proper stack trace
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, ApiError);
+    }
+  }
+}
+
+// Your existing error classes...
 export class PaymentError extends Error {
   statusCode: number;
   code: string;
