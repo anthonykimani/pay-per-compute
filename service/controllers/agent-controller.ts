@@ -41,7 +41,7 @@ export class AgentController {
         maxPricePerUnit: parsedIntent.maxPricePerUnit,
         action: parsedIntent.action,
         isFulfilled: false,
-        selectedAssetId: null, // Explicitly set to null
+        // ✅ FIXED: Removed selectedAssetId - it's managed via the relation
       };
 
       // ✅ Add error handling around database insert
@@ -77,7 +77,7 @@ export class AgentController {
       });
 
       // ✅ Start execution AFTER successful save
-      AgentExecutionService.executeIntents();
+      // AgentExecutionService.executeIntents();
 
       res.status(201).json({
         success: true,
@@ -129,7 +129,8 @@ export class AgentController {
         status: intent.isFulfilled ? 'fulfilled' : 'scanning',
         createdAt: intent.createdAt,
         selectedAsset: intent.selectedAsset,
-        requiresApproval: !!intent.selectedAssetId && !intent.isFulfilled,
+        // ✅ FIXED: Check selectedAsset directly instead of selectedAssetId
+        requiresApproval: !!intent.selectedAsset && !intent.isFulfilled,
         totalCost: intent.selectedAsset ? 
           (parseFloat(intent.selectedAsset.pricePerUnit) * intent.durationMinutes).toFixed(6) 
           : null

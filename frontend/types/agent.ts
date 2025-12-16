@@ -1,17 +1,15 @@
 import { Asset } from "./asset";
 
 export interface AgentIntent {
-  intentId: string;
-  message: string;
-  userWallet: string;
-  signature: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
-  result?: {
-    matchedAssets: Asset[];
-    recommendedAsset?: Asset;
-    totalCost?: string;
-  };
+  id: string;
+  status: 'scanning' | 'fulfilled';
   createdAt: string;
+  selectedAsset?: Asset;
+  requiresApproval?: boolean;
+  totalCost?: string;
+  durationMinutes?: number; // ✅ Add this
+  userWallet?: string;
+  assetType?: string;
 }
 
 export interface AgentLog {

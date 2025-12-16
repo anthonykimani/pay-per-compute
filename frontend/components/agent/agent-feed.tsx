@@ -77,7 +77,7 @@ export function AgentFeed({ intentId, userWallet }: AgentFeedProps) {
       error: AlertCircle,
       warning: Clock,
     };
-    return icons[level];
+    return icons[level] || Loader2;
   };
 
   const getColor = (level: AgentLog['level']) => {

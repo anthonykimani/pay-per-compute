@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { AgentChat } from './agent-chat';
 import { AgentFeed } from './agent-feed';
 import { SessionDetails } from './session-details';
+import { AssetApprovalCard } from './asset-approval-card';
 import { PaymentRequirementDisplay } from '../payment/payment-requirement-display';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { usePaymentFlow } from '@/hooks/use-payment-flow';
@@ -13,49 +14,56 @@ import { Card } from '@/components/ui/card';
 import { Bot } from 'lucide-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { parseError } from '@/lib/error';
+import { useSocket } from '@/provider/socket-provider';
+import { Asset } from '@/types';
 
 export function AgentInterface() {
     const wallet = useWallet();
     const [intentId, setIntentId] = useState<string | null>(null);
+    const [durationMinutes, setDurationMinutes] = useState<number>(30);
     const { paymentRequirement, session, initiate, complete, reset, isLoading } = usePaymentFlow();
     const { data: intent } = useAgentIntent(intentId || '');
     const { toast } = useToast();
+    const { emitWalletSubscription, connected } = useSocket();
 
-    // ✅ Normalize wallet
     const normalizedWallet = wallet.publicKey?.toString().toLowerCase();
 
-    // ✅ DEBUG: Log state changes
     useEffect(() => {
-        console.log('🐞 AGENT INTERFACE: State updated', {
-            intentId,
-            walletConnected: wallet.connected,
-            walletAddress: normalizedWallet,
-            intentData: intent,
-            paymentRequirement: !!paymentRequirement,
-            session: !!session,
-        });
-    }, [intentId, wallet.connected, normalizedWallet, intent, paymentRequirement, session]);
-
-    // ✅ Auto-initiate payment when agent finds asset
-    useEffect(() => {
-        if (intent?.result?.recommendedAsset && !session && !paymentRequirement) {
-            console.log('🐞 AGENT INTERFACE: Auto-initiating payment for asset',
-                intent.result.recommendedAsset.id
-            );
-            initiate(intent.result.recommendedAsset.id);
+        if (wallet.connected && normalizedWallet && connected) {
+            emitWalletSubscription(normalizedWallet);
         }
-    }, [intent, session, paymentRequirement, initiate]);
+    }, [wallet.connected, normalizedWallet, connected, emitWalletSubscription]);
+
+    // ✅ WORKAROUND: Show approval if asset found but no payment started
+    // This bypasses the broken backend isFulfilled flag
+    const showApproval = intent?.selectedAsset && 
+                         intent.totalCost && // Additional check for data presence
+                         !paymentRequirement && 
+                         !session;
+
+    const handleApprove = () => {
+        if (intent?.selectedAsset) {
+            initiate(intent.selectedAsset.id);
+        }
+    };
+
+    const handleReject = () => {
+        toast({
+            title: 'Asset Rejected',
+            description: 'Agent will continue scanning...',
+            variant: 'destructive',
+        });
+        reset();
+    };
 
     const handlePay = async () => {
         if (!normalizedWallet || !paymentRequirement) return;
-
         try {
             await complete(paymentRequirement.assetId, wallet);
         } catch (error) {
-            const parsedError = parseError(error);
             toast({
                 title: 'Payment Error',
-                description: parsedError.message,
+                description: parseError(error).message,
                 variant: 'destructive',
             });
         }
@@ -65,9 +73,7 @@ export function AgentInterface() {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh]">
                 <h2 className="text-2xl font-semibold mb-4">Connect Your Wallet</h2>
-                <p className="text-muted-foreground mb-8">
-                    Connect your Solana wallet to start chatting with the AI agent
-                </p>
+                <p className="text-muted-foreground mb-8">Connect your Solana wallet to start chatting with the AI agent</p>
                 <WalletMultiButton />
             </div>
         );
@@ -76,10 +82,21 @@ export function AgentInterface() {
     return (
         <div className="grid lg:grid-cols-2 gap-8">
             <div className="space-y-4">
-                <AgentChat onIntentCreated={(id) => {
-                    console.log('🐞 AGENT INTERFACE: Intent created, ID:', id);
+                <AgentChat onIntentCreated={(id, duration) => {
                     setIntentId(id);
+                    setDurationMinutes(duration);
+                    reset();
                 }} />
+
+                {showApproval && intent.selectedAsset && (
+                    <AssetApprovalCard
+                        asset={intent.selectedAsset}
+                        durationMinutes={durationMinutes}
+                        totalCost={intent.totalCost || '0.000000'}
+                        onApprove={handleApprove}
+                        onReject={handleReject}
+                    />
+                )}
 
                 {paymentRequirement && !session && (
                     <PaymentRequirementDisplay
@@ -93,28 +110,12 @@ export function AgentInterface() {
             </div>
 
             <div className="space-y-4">
-                {/* ✅ CRITICAL: Only render AgentFeed when we have intentId AND wallet */}
-                {intentId && normalizedWallet ? (
+                {intentId && normalizedWallet && (
                     <AgentFeed
-                        key={`${intentId}-${normalizedWallet}`} // ✅ Force remount when props change
+                        key={`${intentId}-${normalizedWallet}`}
                         intentId={intentId}
                         userWallet={normalizedWallet}
                     />
-                ) : (
-                    <Card className="p-8">
-                        <div className="flex flex-col items-center justify-center text-center">
-                            <Bot className="h-12 w-12 text-muted-foreground mb-4 opacity-50" />
-                            <h3 className="text-lg font-semibold mb-2">Agent Feed</h3>
-                            <p className="text-muted-foreground">
-                                Send a message to the AI agent to see activity here
-                            </p>
-                            {intentId && !normalizedWallet && (
-                                <p className="text-sm text-yellow-500 mt-2">
-                                    Waiting for wallet connection...
-                                </p>
-                            )}
-                        </div>
-                    </Card>
                 )}
             </div>
         </div>
