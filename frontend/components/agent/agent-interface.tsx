@@ -1,42 +1,69 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { AgentChat } from './agent-chat';
 import { AgentFeed } from './agent-feed';
 import { SessionDetails } from './session-details';
+import { AssetApprovalCard } from './asset-approval-card';
+import { PaymentRequirementDisplay } from '../payment/payment-requirement-display';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { useToast } from '@/hooks/use-toast';
-import { Card } from '../ui/card';
-import { Bot } from 'lucide-react';
-import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { usePaymentFlow } from '@/hooks/use-payment-flow';
 import { useAgentIntent } from '@/hooks/use-agent-intent';
+import { useToast } from '@/hooks/use-toast';
+import { Card } from '@/components/ui/card';
+import { Bot } from 'lucide-react';
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { parseError } from '@/lib/error';
-import { PaymentRequirementDisplay } from '../payment/payment-requirement-display';
+import { useSocket } from '@/provider/socket-provider';
+import { Asset } from '@/types';
 
 export function AgentInterface() {
     const wallet = useWallet();
     const [intentId, setIntentId] = useState<string | null>(null);
+    const [durationMinutes, setDurationMinutes] = useState<number>(30);
     const { paymentRequirement, session, initiate, complete, reset, isLoading } = usePaymentFlow();
     const { data: intent } = useAgentIntent(intentId || '');
     const { toast } = useToast();
+    const { emitWalletSubscription, connected } = useSocket();
+
+    const normalizedWallet = wallet.publicKey?.toString().toLowerCase();
 
     useEffect(() => {
-        if (intent?.result?.recommendedAsset && !session) {
-            initiate(intent.result.recommendedAsset.id);
+        if (wallet.connected && normalizedWallet && connected) {
+            emitWalletSubscription(normalizedWallet);
         }
-    }, [intent, session, initiate]);
+    }, [wallet.connected, normalizedWallet, connected, emitWalletSubscription]);
+
+    // ✅ WORKAROUND: Show approval if asset found but no payment started
+    // This bypasses the broken backend isFulfilled flag
+    const showApproval = intent?.selectedAsset && 
+                         intent.totalCost && // Additional check for data presence
+                         !paymentRequirement && 
+                         !session;
+
+    const handleApprove = () => {
+        if (intent?.selectedAsset) {
+            initiate(intent.selectedAsset.id);
+        }
+    };
+
+    const handleReject = () => {
+        toast({
+            title: 'Asset Rejected',
+            description: 'Agent will continue scanning...',
+            variant: 'destructive',
+        });
+        reset();
+    };
 
     const handlePay = async () => {
-        if (!wallet.publicKey || !paymentRequirement) return;
-
+        if (!normalizedWallet || !paymentRequirement) return;
         try {
             await complete(paymentRequirement.assetId, wallet);
         } catch (error) {
-            const parsedError = parseError(error);
             toast({
                 title: 'Payment Error',
-                description: parsedError.message,
+                description: parseError(error).message,
                 variant: 'destructive',
             });
         }
@@ -55,7 +82,21 @@ export function AgentInterface() {
     return (
         <div className="grid lg:grid-cols-2 gap-8">
             <div className="space-y-4">
-                <AgentChat onIntentCreated={setIntentId} />
+                <AgentChat onIntentCreated={(id, duration) => {
+                    setIntentId(id);
+                    setDurationMinutes(duration);
+                    reset();
+                }} />
+
+                {showApproval && intent.selectedAsset && (
+                    <AssetApprovalCard
+                        asset={intent.selectedAsset}
+                        durationMinutes={durationMinutes}
+                        totalCost={intent.totalCost || '0.000000'}
+                        onApprove={handleApprove}
+                        onReject={handleReject}
+                    />
+                )}
 
                 {paymentRequirement && !session && (
                     <PaymentRequirementDisplay
@@ -65,24 +106,16 @@ export function AgentInterface() {
                     />
                 )}
 
-                {session && (
-                    <SessionDetails session={session} />
-                )}
+                {session && <SessionDetails session={session} />}
             </div>
 
             <div className="space-y-4">
-                {intentId && wallet.publicKey ? (
-                    <AgentFeed intentId={intentId} userWallet={wallet.publicKey.toString()} />
-                ) : (
-                    <Card className="p-8">
-                        <div className="flex flex-col items-center justify-center text-center">
-                            <Bot className="h-12 w-12 text-muted-foreground mb-4 opacity-50" />
-                            <h3 className="text-lg font-semibold mb-2">Agent Feed</h3>
-                            <p className="text-muted-foreground">
-                                Send a message to the AI agent to see activity here
-                            </p>
-                        </div>
-                    </Card>
+                {intentId && normalizedWallet && (
+                    <AgentFeed
+                        key={`${intentId}-${normalizedWallet}`}
+                        intentId={intentId}
+                        userWallet={normalizedWallet}
+                    />
                 )}
             </div>
         </div>

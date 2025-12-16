@@ -14,15 +14,21 @@ import { Form, FormControl, FormField, FormItem, FormMessage } from '@/component
 import { useCreateIntent } from '@/hooks/use-agent-intent';
 import { parseError } from '@/lib/error';
 
-
 const formSchema = z.object({
   message: z.string().min(10, 'Be more specific about your compute needs'),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
+// ✅ CORRECT TYPE: Backend creation response
+interface CreateIntentResponse {
+  intentId: string;
+  status: string;
+  parsed: any;
+}
+
 interface AgentChatProps {
-  onIntentCreated: (id: string) => void;
+  onIntentCreated: (id: string, durationMinutes: number) => void;
 }
 
 export function AgentChat({ onIntentCreated }: AgentChatProps) {
@@ -41,21 +47,30 @@ export function AgentChat({ onIntentCreated }: AgentChatProps) {
     "3D printer in Nairobi for 2 hours",
   ];
 
+  const extractDuration = (message: string): number => {
+    const hourMatch = message.match(/(\d+)\s*hour/);
+    const minuteMatch = message.match(/(\d+)\s*min/);
+    if (hourMatch) return parseInt(hourMatch[1]) * 60;
+    if (minuteMatch) return parseInt(minuteMatch[1]);
+    return 30;
+  };
+
   const onSubmit = async (values: FormValues) => {
     try {
-      const result = await createIntent.mutateAsync(values.message);
+      const result = await createIntent.mutateAsync(values.message) as CreateIntentResponse;
+      const duration = extractDuration(values.message);
+      
       form.reset();
-      onIntentCreated(result.intentId);
+      onIntentCreated(result.intentId, duration);
       toast({
         title: 'Intent Created',
-        description: 'AI agent is scanning the marketplace...',
+        description: `Agent scanning for ${duration}min of compute...`,
         variant: 'success',
       });
     } catch (error) {
-      const parsedError = parseError(error);
       toast({
         title: 'Error',
-        description: parsedError.message,
+        description: parseError(error).message,
         variant: 'destructive',
       });
     }
@@ -63,11 +78,12 @@ export function AgentChat({ onIntentCreated }: AgentChatProps) {
 
   return (
     <Card className="w-full">
-      <CardHeader>
+      <CardHeader className='flex justify-between w-full items-center'>
         <CardTitle className="flex items-center gap-2">
           <Bot className="h-5 w-5" />
           AI Compute Finder
         </CardTitle>
+        <WalletMultiButton className="w-full justify-center" />
       </CardHeader>
       <CardContent>
         <Form {...form}>
@@ -105,28 +121,23 @@ export function AgentChat({ onIntentCreated }: AgentChatProps) {
               ))}
             </div>
 
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex-1">
-                <WalletMultiButton className="w-full justify-center" />
-              </div>
-              <Button
-                type="submit"
-                disabled={!wallet.connected || createIntent.isPending || !form.formState.isValid}
-                className="flex-1"
-              >
-                {createIntent.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <Send className="mr-2 h-4 w-4" />
-                    Send Request
-                  </>
-                )}
-              </Button>
-            </div>
+            <Button
+              type="submit"
+              disabled={!wallet.connected || createIntent.isPending || !form.formState.isValid}
+              className="w-full"
+            >
+              {createIntent.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Send className="mr-2 h-4 w-4" />
+                  Send Request
+                </>
+              )}
+            </Button>
           </form>
         </Form>
       </CardContent>

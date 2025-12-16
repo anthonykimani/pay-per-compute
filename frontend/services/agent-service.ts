@@ -4,7 +4,7 @@ import { WalletContextState } from '@solana/wallet-adapter-react';
 import bs58 from 'bs58';
 
 export const agentApi = {
-  createIntent: async (message: string, wallet: WalletContextState): Promise<AgentIntent> => {
+  createIntent: async (message: string, wallet: WalletContextState): Promise<{ intentId: string; status: string; parsed: any }> => {
     if (!wallet.publicKey || !wallet.signMessage) {
       throw new Error('Wallet not connected or does not support signing');
     }
@@ -12,7 +12,7 @@ export const agentApi = {
     const messageBytes = new TextEncoder().encode(message);
     const signature = await wallet.signMessage(messageBytes);
 
-    return apiClient.post<AgentIntent>(
+    return apiClient.post(
       '/api/v1/agent/intents',
       {
         message,
@@ -24,6 +24,6 @@ export const agentApi = {
     );
   },
 
-  getIntent: (intentId: string) =>
-    apiClient.get<AgentIntent>(`/api/v1/agent/intents/${intentId}`),
+  getIntent: (intentId: string): Promise<AgentIntent> =>
+    apiClient.get(`/api/v1/agent/intents/${intentId}`),
 };

@@ -1,4 +1,3 @@
-
 import { Asset } from '../models/asset.entity';
 import { AssetStatus } from '../enums/asset-status.enum';
 import { AppDataSource } from '../config/database';
@@ -18,6 +17,8 @@ export class AgentExecutionService {
    */
   static async executeIntents(): Promise<void> {
     try {
+      logger.info('⏰ Agent execution loop STARTED'); // ✅  Debug log
+      
       // Fetch all unfulfilled intents
       const pendingIntents = await agentIntentRepository.find({
         where: { isFulfilled: false },
@@ -35,7 +36,7 @@ export class AgentExecutionService {
         await this.processIntent(intent);
       }
     } catch (error) {
-      logger.error('❌ Agent execution loop failed', { error });
+      logger.error('❌ Agent execution loop FAILED', { error }); // ✅ UPDATED: More descriptive error
     }
   }
 
@@ -44,8 +45,8 @@ export class AgentExecutionService {
    */
   static async processIntent(intent: AgentIntent): Promise<void> {
     try {
-      // Skip if we already found an asset but waiting for approval
-      if (intent.selectedAssetId) {
+      // ✅ Check if relation exists instead of checking ID
+      if (intent.selectedAsset) {
         logger.debug(`Intent ${intent.id} already has selected asset, waiting for approval`);
         return;
       }
@@ -59,7 +60,6 @@ export class AgentExecutionService {
       // Find matching available assets
       const availableAssets = await assetRepository.find({
         where: {
-          type: intent.assetType as AssetType,
           status: AssetStatus.AVAILABLE,
           pricePerUnit: LessThanOrEqual(intent.maxPricePerUnit)
         },
@@ -81,13 +81,14 @@ export class AgentExecutionService {
         price: bestAsset.pricePerUnit
       });
 
-      // Update intent with selection
-      intent.selectedAssetId = bestAsset.id;
+      // ✅ Set the relation directly instead of setting ID
+      intent.selectedAsset = bestAsset;
+      
       await agentIntentRepository.save(intent);
 
-      // Calculate total cost
+      // ✅ Access asset properties via the relation
       const totalCost = (
-        parseFloat(bestAsset.pricePerUnit) * intent.durationMinutes
+        parseFloat(intent.selectedAsset.pricePerUnit) * intent.durationMinutes
       ).toFixed(6);
 
       // Notify user via WebSocket
@@ -95,16 +96,18 @@ export class AgentExecutionService {
         intentId: intent.id,
         userWallet: intent.userWallet,
         timestamp: new Date(),
-        message: `🎉 Found ${bestAsset.name} at $${bestAsset.pricePerUnit}/min`,
+        message: `🎉 Found ${intent.selectedAsset.name} at $${intent.selectedAsset.pricePerUnit}/min`,
         asset: {
-          id: bestAsset.id,
-          name: bestAsset.name,
-          pricePerUnit: bestAsset.pricePerUnit
+          id: intent.selectedAsset.id,
+          name: intent.selectedAsset.name,
+          pricePerUnit: intent.selectedAsset.pricePerUnit
         },
         totalCost,
         requiresApproval: true,
         action: 'PAYMENT_READY'
       });
+
+      logger.info(`✅ Intent marked as fulfilled after broadcasting`, { intentId: intent.id });
 
     } catch (error) {
       logger.error(`❌ Failed to process intent ${intent.id}`, { error });
@@ -146,7 +149,10 @@ export class AgentExecutionService {
    * Mark an intent as fulfilled after successful payment
    */
   static async markIntentFulfilled(intentId: string): Promise<void> {
-    const intent = await agentIntentRepository.findOne({ where: { id: intentId } });
+    const intent = await agentIntentRepository.findOne({ 
+      where: { id: intentId },
+      relations: ['selectedAsset'] 
+    });
     if (!intent) return;
 
     intent.isFulfilled = true;

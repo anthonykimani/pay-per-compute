@@ -4,6 +4,7 @@ import { initializeWebSocket } from './websocket/index';
 import http from 'http';
 import { ENV } from './config/env';
 import logger from './utils/logger';
+import { AgentExecutionService } from './services/agent-execution-service'; // ✅ ADD THIS IMPORT
 
 const bootstrap = async () => {
   try {
@@ -27,6 +28,14 @@ const bootstrap = async () => {
         facilitator: ENV.PAYAI_FACILITATOR_URL
       });
     });
+
+    //  Start agent intent processing loop
+    setInterval(async () => {
+      logger.debug('⏰ Agent execution interval triggered');
+      await AgentExecutionService.executeIntents();
+    }, 30000); // Run every 30 seconds
+
+    logger.info('🤖 Agent execution loop started (30s interval)');
 
     // Graceful shutdown
     process.on('SIGTERM', async () => {

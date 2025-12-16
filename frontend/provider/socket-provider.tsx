@@ -9,9 +9,11 @@ import { env } from '@/config/env';
 interface SocketContextType {
   socket: Socket | null;
   connected: boolean;
+  subscribedWallet: string | null;
   subscribeToIntent: (intentId: string) => void;
   subscribeToWallet: (wallet: string) => void;
   onAgentLog: (handler: (log: AgentLog) => void) => () => void;
+  emitWalletSubscription: (wallet: string) => void;
 }
 
 const SocketContext = createContext<SocketContextType | undefined>(undefined);
@@ -22,18 +24,21 @@ const RECONNECT_DELAY = 2000;
 export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState(false);
+  const [subscribedWallet, setSubscribedWallet] = useState<string | null>(null);
   const { toast } = useToast();
   const reconnectAttemptRef = useRef(0);
+  const mountedRef = useRef(true);
 
-  // ✅ FIX: Store toast in ref to prevent dependency changes
   const toastRef = useRef(toast);
   useEffect(() => {
     toastRef.current = toast;
   }, [toast]);
 
-  // ✅ FIX: EMPTY DEPENDENCY ARRAY - prevents infinite loops
   useEffect(() => {
+    mountedRef.current = true;
+    
     const socketUrl = env.NEXT_PUBLIC_BACKEND_URL || 'ws://localhost:3001';
+    console.log('🐞 SOCKET: Initializing connection to', socketUrl);
     
     const socketInstance = io(socketUrl, {
       transports: ['websocket', 'polling'],
@@ -42,33 +47,37 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       reconnectionDelay: RECONNECT_DELAY,
       timeout: 10000,
       autoConnect: true,
+      forceNew: false, // Critical: false for React StrictMode
     });
 
     socketInstance.on('connect', () => {
+      if (!mountedRef.current) return;
       setConnected(true);
       reconnectAttemptRef.current = 0;
-      console.log('✅ Socket connected to:', socketUrl);
+      console.log('✅ SOCKET: Connected successfully, ID:', socketInstance.id);
+      
+      // Auto-subscribe to wallet if available in localStorage
+      const wallet = localStorage.getItem('connected_wallet');
+      if (wallet) {
+        const normalizedWallet = wallet.toLowerCase();
+        socketInstance.emit('subscribe:user', normalizedWallet);
+        setSubscribedWallet(normalizedWallet);
+        console.log('📡 SOCKET: Auto-subscribed to wallet from storage:', normalizedWallet);
+      }
     });
 
     socketInstance.on('disconnect', (reason) => {
-      setConnected(false);
-      console.log('❌ Socket disconnected:', reason);
-      
-      // ✅ FIX: Use toastRef.current
-      if (reason === 'io server disconnect') {
-        toastRef.current({
-          title: 'Session Ended',
-          description: 'You have been disconnected from the server',
-          variant: 'destructive',
-        });
+      console.log('❌ SOCKET: Disconnected. Reason:', reason);
+      if (mountedRef.current) {
+        setConnected(false);
+        setSubscribedWallet(null);
       }
     });
 
     socketInstance.on('connect_error', (error) => {
-      console.error('Socket connection error:', error.message);
+      console.error('SOCKET: Connection error:', error.message);
       reconnectAttemptRef.current++;
       
-      // ✅ FIX: Use toastRef.current
       if (reconnectAttemptRef.current >= MAX_RECONNECT_ATTEMPTS) {
         toastRef.current({
           title: 'Connection Failed',
@@ -79,34 +88,57 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     });
 
     socketInstance.on('reconnect_attempt', (attempt) => {
-      console.log(`🔄 Reconnection attempt ${attempt}/${MAX_RECONNECT_ATTEMPTS}`);
+      console.log(`🔄 SOCKET: Reconnection attempt ${attempt}/${MAX_RECONNECT_ATTEMPTS}`);
     });
 
-    setSocket(socketInstance);
+    socketInstance.onAny((event, ...args) => {
+      console.log('📥 SOCKET: Received event:', event, 'Data:', args);
+    });
+
+    if (mountedRef.current) {
+      setSocket(socketInstance);
+    }
 
     return () => {
+      console.log('🔌 SOCKET: Cleaning up connection');
+      mountedRef.current = false;
+      socketInstance.removeAllListeners();
       socketInstance.disconnect();
+      setSubscribedWallet(null);
     };
-  }, []); // ✅ EMPTY ARRAY - no dependencies
+  }, []);
 
-  // ✅ FIX: Add null checks and proper cleanup
   const subscribeToIntent = useCallback((intentId: string) => {
-    if (!socket || !intentId) return;
+    if (!socket || !intentId) {
+      console.warn('🐞 SOCKET: Cannot subscribe - no socket or intentId');
+      return;
+    }
+    console.log('📡 SOCKET: Subscribing to intent:', intentId);
     socket.emit('subscribe:intent', intentId);
-    console.log('📡 Subscribed to intent:', intentId);
   }, [socket]);
 
   const subscribeToWallet = useCallback((wallet: string) => {
-    if (!socket || !wallet) return;
-    socket.emit('subscribe:user', wallet);
-    console.log('📡 Subscribed to wallet:', wallet);
+    if (!socket || !wallet) {
+      console.warn('🐞 SOCKET: Cannot subscribe - no socket or wallet');
+      return;
+    }
+    const normalizedWallet = wallet.toLowerCase();
+    console.log('📡 SOCKET: Subscribing to wallet:', normalizedWallet);
+    socket.emit('subscribe:user', normalizedWallet);
+    setSubscribedWallet(normalizedWallet);
+    localStorage.setItem('connected_wallet', wallet);
   }, [socket]);
+
+  const emitWalletSubscription = useCallback((wallet: string) => {
+    subscribeToWallet(wallet);
+  }, [subscribeToWallet]);
 
   const onAgentLog = useCallback((handler: (log: AgentLog) => void) => {
     if (!socket) return () => {};
     
+    console.log('🐞 SOCKET: Attaching agent:log listener');
     const wrappedHandler = (log: AgentLog) => {
-      console.log('📥 Received agent log:', log);
+      console.log('📥 SOCKET: Received agent:log:', log);
       handler(log);
     };
     
@@ -119,9 +151,11 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const value: SocketContextType = {
     socket,
     connected,
+    subscribedWallet,
     subscribeToIntent,
     subscribeToWallet,
     onAgentLog,
+    emitWalletSubscription,
   };
 
   return <SocketContext.Provider value={value}>{children}</SocketContext.Provider>;

@@ -29,9 +29,6 @@ export class AgentIntent extends BaseEntity {  // ✅ Extend BaseEntity
   @Column({ type: 'decimal', precision: 20, scale: 6 })
   maxPricePerUnit: string;
 
-  @Column({ type: 'uuid', nullable: true })
-  selectedAssetId?: string;
-
   @ManyToOne(() => Asset, { nullable: true })
   @JoinColumn({ name: 'selected_asset_id' })
   selectedAsset?: Asset;

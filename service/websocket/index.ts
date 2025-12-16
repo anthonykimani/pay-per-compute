@@ -1,3 +1,4 @@
+// packages/backend/src/websocket/index.ts
 import { Server, Socket } from 'socket.io';
 import http from 'http';
 import logger from '../utils/logger';
@@ -30,43 +31,55 @@ export const initializeWebSocket = (server: http.Server): void => {
       transport: socket.conn.transport.name
     });
 
-    // ✅ FIX: Add intent subscription handler
+    // Debug: Log all subscription attempts
     socket.on('subscribe:intent', (intentId: string) => {
       if (!intentId) {
-        logger.warn('Invalid intent subscription attempt', { socketId: socket.id });
+        logger.warn('❌ Invalid intent subscription attempt', { socketId: socket.id });
         return;
       }
       socket.join(`intent:${intentId}`);
-      logger.info(`🎯 Intent subscribed`, { intentId, socketId: socket.id });
+      logger.info(`🎯 Intent subscribed: intent:${intentId}`, { 
+        socketId: socket.id,
+        rooms: Array.from(socket.rooms)
+      });
     });
 
     socket.on('subscribe:user', (walletAddress: string) => {
       if (!walletAddress) {
-        logger.warn('Invalid wallet subscription attempt', { socketId: socket.id });
+        logger.warn('❌ Invalid wallet subscription attempt', { socketId: socket.id });
         return;
       }
-      socket.join(`user:${walletAddress}`);
-      logger.info(`👤 User subscribed`, { walletAddress, socketId: socket.id });
+      // ✅ Normalize wallet to lowercase for consistency
+      const normalizedWallet = walletAddress.toLowerCase();
+      socket.join(`user:${normalizedWallet}`);
+      logger.info(`👤 User subscribed: user:${normalizedWallet}`, { 
+        socketId: socket.id,
+        rooms: Array.from(socket.rooms)
+      });
     });
 
     socket.on('subscribe:merchant', (apiKey: string) => {
       if (!apiKey) {
-        logger.warn('Invalid merchant subscription attempt', { socketId: socket.id });
+        logger.warn('❌ Invalid merchant subscription attempt', { socketId: socket.id });
         return;
       }
       socket.join(`merchant:${apiKey}`);
-      logger.info(`🏪 Merchant subscribed`, { apiKey: apiKey.slice(-6), socketId: socket.id });
+      logger.info(`🏪 Merchant subscribed: merchant:${apiKey.slice(-6)}`, { 
+        socketId: socket.id,
+        rooms: Array.from(socket.rooms)
+      });
     });
 
     socket.on('disconnect', (reason) => {
       logger.info('🔌 WebSocket client disconnected', { 
         socketId: socket.id, 
-        reason 
+        reason,
+        rooms: Array.from(socket.rooms) // Show what rooms they left
       });
     });
 
     socket.on('error', (err: Error) => {
-      logger.error('Socket error', { socketId: socket.id, error: err.message });
+      logger.error('💥 Socket error', { socketId: socket.id, error: err.message });
     });
   });
 
@@ -91,22 +104,24 @@ export const broadcastAgentLog = (data: {
     return;
   }
 
-  // ✅ FIX: Broadcast to both intent and user rooms
+  // ✅ Normalize wallet address
+  const normalizedWallet = data.userWallet.toLowerCase();
+  
+  logger.info('📡 BROADCASTING agent log', {
+    intentRoom: `intent:${data.intentId}`,
+    userRoom: `user:${normalizedWallet}`,
+    message: data.message,
+  });
+
   io.to(`intent:${data.intentId}`).emit('agent:log', data);
-  io.to(`user:${data.userWallet}`).emit('agent:log', data);
-  logger.debug('📡 Broadcasted agent log', { intentId: data.intentId });
-};
-
-/**
- * Broadcast price change to all users
- */
-export const broadcastPriceChange = (data: {
-  assetId: string;
-  oldPrice: string;
-  newPrice: string;
-}): void => {
-  if (!io) return;
-
-  io.emit('price:update', data);
-  logger.debug('📡 Broadcasted price update', { assetId: data.assetId });
+  io.to(`user:${normalizedWallet}`).emit('agent:log', data);
+  
+  // ✅ Debug: Log rooms to verify broadcast targets
+  io.fetchSockets().then(sockets => {
+    const targetSockets = sockets.filter(s => 
+      s.rooms.has(`intent:${data.intentId}`) || 
+      s.rooms.has(`user:${normalizedWallet}`)
+    );
+    logger.debug(`📡 Broadcast reached ${targetSockets.length} sockets`);
+  });
 };

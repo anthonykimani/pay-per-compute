@@ -23,3 +23,16 @@ export interface AssetFilters {
   maxPrice?: number;
   unit?: UnitType;
 }
+
+export interface EnhancedAsset extends Asset {
+  totalSessions?: number;
+  totalEarnings?: string;
+}
+
+export interface CreateAssetPayload {
+  name: string;
+  pricePerUnit: string;
+  unit: UnitType;
+  type: AssetType;
+  metadata?: Record<string, unknown>;
+}
